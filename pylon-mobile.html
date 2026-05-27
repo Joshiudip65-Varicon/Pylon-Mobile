@@ -1056,6 +1056,79 @@
     }
     .composer-send:hover { background: var(--accent-strong); }
 
+    /* Collapsed pill — sits at the bottom of the detail view when composer is closed */
+    .composer-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 12px 18px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-2);
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 14.5px;
+      font-weight: 500;
+      transition: background-color .15s, border-color .15s, transform .04s;
+      text-align: left;
+      min-height: 48px;
+    }
+    .composer-pill:hover {
+      background: var(--surface);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .composer-pill:active { transform: scale(.99); }
+    .composer-pill-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+    }
+    .composer-pill-icon svg { width: 18px; height: 18px; }
+    .composer-pill-text { flex: 1; }
+    .composer-pill-draft {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--warning-soft);
+      color: var(--warning);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    /* Composer header — the title row with the minimize chevron */
+    .composer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .composer-header-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+    .composer-close {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background-color .12s, color .12s;
+    }
+    .composer-close:hover { background: var(--surface-2); color: var(--text); }
+    .composer-close svg { width: 18px; height: 18px; }
+
     /* Detail page tweaks */
     .detail-title { font-size: 24px; }
     .msg {
@@ -2121,8 +2194,21 @@
           ${state.messages.map(renderMessage).join('') || `<div class="state-row faint">No messages yet</div>`}
         </ul>
 
-        <div class="composer">
-          <div class="composer-card card" style="padding:0;">
+        <div class="composer" id="composerWrap" data-open="false">
+          <button type="button" class="composer-pill" id="composerOpenBtn">
+            <span class="composer-pill-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            </span>
+            <span class="composer-pill-text" id="composerPillText">Write a reply…</span>
+            <span class="composer-pill-draft" id="composerPillDraft" hidden>Draft</span>
+          </button>
+          <div class="composer-card card" id="composerCard" style="padding:0;" hidden>
+            <div class="composer-header">
+              <span class="composer-header-title" id="composerHeaderTitle">Reply</span>
+              <button type="button" class="composer-close" id="composerCloseBtn" aria-label="Minimize composer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+            </div>
             <div id="recipientsBox" class="recipients-box" hidden></div>
             <div class="editor-toolbar" role="toolbar" aria-label="Formatting">
               <button type="button" class="tbtn" data-cmd="bold" title="Bold (Ctrl/⌘+B)"><b>B</b></button>
@@ -2185,12 +2271,45 @@
       // Lazy-load the list of available tags in the background
       ensureTagsLoaded().then(() => { if (state.view === 'detail') patchTagsSection(); });
 
+      const $composerWrap = document.getElementById('composerWrap');
+      const $composerCard = document.getElementById('composerCard');
+      const $composerOpenBtn = document.getElementById('composerOpenBtn');
+      const $composerCloseBtn = document.getElementById('composerCloseBtn');
+      const $composerPillText = document.getElementById('composerPillText');
+      const $composerPillDraft = document.getElementById('composerPillDraft');
+      const $composerHeaderTitle = document.getElementById('composerHeaderTitle');
       const $editor = document.getElementById('replyEditor');
       const $send = document.getElementById('sendReply');
       const $toggle = document.getElementById('internalToggle');
       const $check = document.getElementById('internalCheck');
       const $internalLabel = document.getElementById('internalLabel');
       const $sendLabel = document.getElementById('sendLabel');
+
+      // Collapse / expand the composer. Default = collapsed pill at the bottom.
+      function setComposerOpen(open) {
+        $composerWrap.dataset.open = open ? 'true' : 'false';
+        $composerCard.hidden = !open;
+        $composerOpenBtn.hidden = open;
+        if (open) {
+          // Focus the editor a beat after the card appears
+          setTimeout(() => $editor.focus(), 30);
+          // Scroll the composer fully into view
+          setTimeout(() => $composerCard.scrollIntoView({ block: 'end', behavior: 'smooth' }), 60);
+        }
+      }
+      function updatePillText() {
+        const isInternal = !!$check.checked;
+        $composerPillText.textContent = isInternal ? 'Add internal note…' : 'Write a reply…';
+        $composerHeaderTitle.textContent = isInternal ? 'Internal note' : 'Public reply';
+        // Show draft indicator if there's any non-whitespace content
+        const hasDraft = (($editor.innerText || '').replace(/​|\s/g, '').length > 0);
+        $composerPillDraft.hidden = !hasDraft;
+      }
+      $composerOpenBtn.addEventListener('click', () => setComposerOpen(true));
+      $composerCloseBtn.addEventListener('click', () => {
+        setComposerOpen(false);
+        updatePillText();
+      });
 
       // Wire toolbar
       const $toolbar = document.querySelector('.editor-toolbar');
@@ -2322,6 +2441,7 @@
         if (!on) {
           $threadPickerPanel.hidden = true;
         }
+        if (typeof updatePillText === 'function') updatePillText();
       }
 
       function renderThreadPicker() {
@@ -2390,11 +2510,11 @@
         if (willShow) renderThreadPicker();
         $threadPickerPanel.hidden = !willShow;
       });
-      $editor.addEventListener('input', syncSendEnabled);
+      $editor.addEventListener('input', () => { syncSendEnabled(); updatePillText(); });
       $editor.addEventListener('keydown', (e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); $send.click(); }
       });
-      syncToggle(); syncSendEnabled(); renderRecipients();
+      syncToggle(); syncSendEnabled(); renderRecipients(); updatePillText();
 
       // If TO is still empty, async-resolve the customer contact and fill in.
       if (recipients.to.length === 0) {
@@ -2453,6 +2573,9 @@
           threadChoice = { kind: 'default' };
           $threadPickerPanel.hidden = true;
           syncToggle(); syncSendEnabled();
+          // Collapse the composer after a successful send
+          setComposerOpen(false);
+          updatePillText();
           toast(
             result.kind === 'note'
               ? (result.threadId ? 'Note posted to thread' : 'Internal note posted')
