@@ -1,0 +1,3372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0b0b0c" media="(prefers-color-scheme: dark)" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Pylon" />
+  <title>Pylon Mobile</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231a1a1f'/%3E%3Cpath d='M20 44V20h12c5 0 8 3 8 7s-3 7-8 7h-6v10h-6zm6-15h5c2 0 3-1 3-2.5S33 24 31 24h-5v5z' fill='white'/%3E%3C/svg%3E" />
+  <style>
+    /* -------- design tokens (Pylon-inspired) -------- */
+    :root {
+      --bg: #faf9fc;
+      --bg-gradient: radial-gradient(120% 80% at 50% -10%, #ece8ff 0%, transparent 55%), #faf9fc;
+      --surface: #ffffff;
+      --surface-2: #f3f1f8;
+      --surface-3: #ebe7f2;
+      --border: #e8e4f0;
+      --border-strong: #d6d0e2;
+      --text: #16121f;
+      --text-muted: #6b6680;
+      --text-faint: #9c98ad;
+      --accent: #6e56cf;        /* Pylon-ish purple */
+      --accent-strong: #5b46b8;
+      --accent-soft: #ece8ff;
+      --accent-text: #ffffff;
+      --primary: #6e56cf;
+      --primary-soft: #ece8ff;
+      --danger: #e5484d;
+      --danger-soft: #ffe5e7;
+      --success: #30a46c;
+      --success-soft: #d6f1e1;
+      --warning: #f5a524;
+      --warning-soft: #fff1d6;
+      --info: #4f86ec;
+      --info-soft: #d8e6ff;
+      --shadow-1: 0 1px 2px rgba(35, 25, 80, .04), 0 2px 8px rgba(35, 25, 80, .06);
+      --shadow-2: 0 8px 24px rgba(35, 25, 80, .12);
+      --shadow-3: 0 -4px 24px rgba(35, 25, 80, .08);
+      --radius: 16px;
+      --radius-sm: 10px;
+      --radius-lg: 22px;
+      --tap: 44px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --header-h: 56px;
+      --bottom-nav-h: 60px;
+      --font: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0a1c;
+        --bg-gradient: radial-gradient(120% 80% at 50% -10%, #2a1f5c 0%, transparent 60%), #0e0a1c;
+        --surface: #1a1530;
+        --surface-2: #221b3d;
+        --surface-3: #2b234a;
+        --border: #2e2750;
+        --border-strong: #423765;
+        --text: #f3eefc;
+        --text-muted: #aaa2c5;
+        --text-faint: #7a7297;
+        --accent: #8b73f0;
+        --accent-strong: #7a61e0;
+        --accent-soft: #2c2360;
+        --accent-text: #ffffff;
+        --primary: #8b73f0;
+        --primary-soft: #2c2360;
+        --danger: #ff6369;
+        --danger-soft: #44171c;
+        --success: #46c089;
+        --success-soft: #143824;
+        --warning: #ffb849;
+        --warning-soft: #3d2912;
+        --info: #6ea0ff;
+        --info-soft: #14264e;
+        --shadow-1: 0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.4);
+        --shadow-2: 0 8px 32px rgba(0,0,0,.5);
+        --shadow-3: 0 -4px 24px rgba(0,0,0,.5);
+      }
+    }
+
+    /* -------- reset / base -------- */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      min-height: 100%;
+      background: var(--bg-gradient);
+      background-attachment: fixed;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: contain;
+    }
+    button, input, textarea, select { font: inherit; color: inherit; }
+    button { background: none; border: none; padding: 0; cursor: pointer; }
+    input, textarea {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      width: 100%;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    input:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,0,0,.05);
+    }
+    @media (prefers-color-scheme: dark) {
+      input:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(255,255,255,.08); }
+    }
+    textarea { resize: vertical; min-height: 90px; font-family: inherit; }
+    a { color: var(--primary); text-decoration: none; }
+    ::placeholder { color: var(--text-faint); }
+
+    /* -------- app shell -------- */
+    .app {
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+      max-width: 720px;
+      margin: 0 auto;
+      background: transparent;
+    }
+    .app.has-nav { padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom)); }
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: calc(var(--safe-top) + 10px) 14px 10px;
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: saturate(180%) blur(14px);
+      -webkit-backdrop-filter: saturate(180%) blur(14px);
+      border-bottom: 1px solid var(--border);
+      min-height: calc(var(--header-h) + var(--safe-top));
+    }
+    .header-title {
+      flex: 1;
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -.01em;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .icon-btn {
+      width: var(--tap);
+      height: var(--tap);
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+      transition: background-color .15s;
+    }
+    .icon-btn:hover { background: var(--surface-2); }
+    .icon-btn:active { background: var(--border); }
+    .icon-btn svg { width: 22px; height: 22px; }
+
+    .main {
+      flex: 1;
+      padding: 14px;
+      padding-bottom: calc(var(--safe-bottom) + 14px);
+    }
+
+    /* -------- shared components -------- */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow-1);
+    }
+    .card + .card { margin-top: 12px; }
+    .label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .help {
+      font-size: 12px;
+      color: var(--text-faint);
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+    .help a { word-break: break-all; }
+    .row { display: flex; align-items: center; gap: 10px; }
+    .row + .row { margin-top: 10px; }
+    .stack-12 > * + * { margin-top: 12px; }
+    .stack-16 > * + * { margin-top: 16px; }
+    .stack-20 > * + * { margin-top: 20px; }
+    .muted { color: var(--text-muted); }
+    .faint { color: var(--text-faint); }
+    .small { font-size: 13px; }
+    .tiny { font-size: 12px; }
+    .center { text-align: center; }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: var(--tap);
+      padding: 0 16px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -.005em;
+      background: var(--surface-2);
+      color: var(--text);
+      transition: transform .04s ease, background-color .15s, opacity .15s;
+      width: 100%;
+    }
+    .btn:hover { background: var(--border); }
+    .btn:active { transform: scale(.985); }
+    .btn[disabled] { opacity: .55; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: var(--accent-text); }
+    .btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--text-muted)); }
+    .btn-danger { background: var(--danger-soft); color: var(--danger); }
+    .btn-ghost { background: transparent; }
+    .btn-ghost:hover { background: var(--surface-2); }
+    .btn-row { display: flex; gap: 10px; }
+    .btn-row .btn { width: auto; flex: 1; }
+
+    /* badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      max-width: 100%;
+    }
+    .badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor;
+      display: inline-block;
+    }
+    .badge-open { color: var(--success); background: var(--success-soft); border-color: transparent; }
+    .badge-closed { color: var(--text-muted); background: var(--surface-2); }
+    .badge-pending { color: var(--warning); background: color-mix(in srgb, var(--warning) 15%, transparent); border-color: transparent; }
+    .badge-snoozed { color: var(--primary); background: var(--primary-soft); border-color: transparent; }
+
+    /* -------- list view -------- */
+    .search {
+      position: relative;
+      margin-bottom: 14px;
+    }
+    .search input {
+      padding-left: 40px;
+      background: var(--surface);
+    }
+    .search-icon {
+      position: absolute;
+      left: 12px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-faint);
+      pointer-events: none;
+    }
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      scrollbar-width: none;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .chip {
+      flex: 0 0 auto;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .chip[aria-pressed="true"] {
+      background: var(--accent);
+      color: var(--accent-text);
+      border-color: var(--accent);
+    }
+    .issue-list { list-style: none; padding: 0; margin: 0; }
+    .issue-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: var(--text-faint);
+    }
+    .issue-num { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-muted); }
+    .issue-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -.005em;
+      color: var(--text);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .issue-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 10px;
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .dot { color: var(--text-faint); }
+
+    /* -------- detail view -------- */
+    .detail-header {
+      padding: 4px 2px 14px;
+    }
+    .detail-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      line-height: 1.25;
+      margin: 4px 0 10px;
+    }
+    .detail-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .thread {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 20px;
+    }
+    .msg {
+      padding: 14px 16px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-1);
+    }
+    .msg + .msg { margin-top: 10px; }
+    .msg-internal {
+      background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+      border-color: color-mix(in srgb, var(--warning) 22%, var(--border));
+    }
+    .msg-header {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .msg-author { font-weight: 600; color: var(--text); }
+    .msg-time { color: var(--text-faint); font-size: 12px; }
+    .msg-body {
+      font-size: 14.5px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+    }
+    .msg-body img { max-width: 100%; height: auto; border-radius: 8px; }
+    .msg-body p { margin: 0 0 .8em; }
+    .msg-body p:last-child { margin-bottom: 0; }
+    .msg-body blockquote {
+      margin: .6em 0;
+      padding: .2em 0 .2em .8em;
+      border-left: 3px solid var(--border-strong);
+      color: var(--text-muted);
+    }
+
+    /* reply composer */
+    .composer {
+      position: sticky;
+      bottom: 0;
+      padding: 12px 0 calc(var(--safe-bottom) + 12px);
+      background: linear-gradient(to bottom, transparent, var(--bg) 22%);
+      margin-top: 24px;
+    }
+    .composer-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      box-shadow: var(--shadow-2);
+    }
+    .composer textarea {
+      border: none;
+      padding: 8px;
+      min-height: 80px;
+      width: 100%;
+      background: transparent;
+    }
+    .composer textarea:focus { box-shadow: none; }
+    .composer-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-top: 4px;
+      border-top: 1px solid var(--border);
+      margin-top: 6px;
+    }
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      min-height: 32px;
+    }
+    .toggle input { display: none; }
+    .toggle[data-on="true"] {
+      background: color-mix(in srgb, var(--warning) 18%, transparent);
+      color: var(--warning);
+    }
+    .composer-send {
+      margin-left: auto;
+      min-height: 44px;
+      min-width: 96px;
+      padding: 0 22px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-text);
+      font-weight: 600;
+      font-size: 15px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: opacity .15s, transform .04s;
+    }
+    .composer-send:active { transform: scale(.97); }
+    .composer-send[disabled] { opacity: .35; cursor: not-allowed; }
+    .toggle { min-height: 36px; padding: 8px 12px; cursor: pointer; }
+    .thread-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 12px;
+      min-height: 36px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px dashed var(--border-strong);
+      max-width: 180px;
+    }
+    .thread-chip svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .thread-chip[data-on="true"] {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-style: solid;
+      border-color: var(--accent);
+    }
+    .thread-chip span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .thread-picker {
+      border-top: 1px solid var(--border);
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 4px;
+      background: var(--surface);
+    }
+    .thread-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+      transition: background-color .12s;
+    }
+    .thread-option:hover { background: var(--surface-2); }
+    .thread-option[aria-pressed="true"] {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .thread-option .thread-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-faint);
+      flex-shrink: 0;
+    }
+    .thread-option[aria-pressed="true"] .thread-dot { background: var(--accent); }
+    .thread-option .thread-hint {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--text-faint);
+      font-style: italic;
+    }
+    .thread-option-new {
+      color: var(--accent);
+      font-weight: 600;
+      border-top: 1px solid var(--border);
+      margin-top: 4px;
+      border-radius: 0 0 8px 8px;
+    }
+
+    /* ============ Recipients (To/Cc/Bcc) ============ */
+    .recipients-box {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 13px;
+    }
+    .rcpt-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 4px 0;
+      min-height: 32px;
+    }
+    .rcpt-row + .rcpt-row { border-top: 1px dashed var(--border); padding-top: 6px; margin-top: 2px; }
+    .rcpt-label {
+      flex-shrink: 0;
+      min-width: 26px;
+      color: var(--text-muted);
+      font-weight: 600;
+      padding-top: 4px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .rcpt-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      flex: 1;
+      min-width: 0;
+    }
+    .rcpt-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 4px 3px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--text);
+      max-width: 100%;
+      font-size: 12.5px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .rcpt-chip { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+    }
+    .rcpt-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 220px;
+    }
+    .rcpt-remove {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      font-size: 14px;
+      line-height: 1;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .rcpt-remove:hover { background: rgba(0,0,0,.08); }
+    @media (prefers-color-scheme: dark) {
+      .rcpt-remove:hover { background: rgba(255,255,255,.12); }
+    }
+    .rcpt-add {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--accent);
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px dashed var(--border-strong);
+      min-height: 26px;
+    }
+    .rcpt-add:hover { background: var(--accent-soft); border-color: var(--accent); }
+    .rcpt-toggles {
+      display: flex;
+      gap: 6px;
+      padding: 4px 0 0;
+    }
+    .rcpt-toggle {
+      font-size: 11.5px;
+      color: var(--text-faint);
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+    .rcpt-toggle:hover { color: var(--accent); background: var(--accent-soft); }
+    .state-row-label {
+      margin-top: 14px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    /* states */
+    .state {
+      padding: 56px 24px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .state .icon {
+      width: 44px; height: 44px;
+      margin: 0 auto 10px;
+      opacity: .7;
+    }
+    .spinner {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      border: 2px solid var(--border-strong);
+      border-top-color: var(--text);
+      animation: spin .8s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .state-row {
+      display: flex; align-items: center; gap: 10px;
+      justify-content: center;
+      padding: 24px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    /* settings list rows */
+    .list-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .list-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      min-height: 56px;
+      cursor: pointer;
+      transition: background-color .15s;
+      width: 100%;
+      text-align: left;
+    }
+    .list-row + .list-row { border-top: 1px solid var(--border); }
+    .list-row:hover { background: var(--surface-2); }
+    .list-row .left { color: var(--text-muted); display: flex; align-items: center; }
+    .list-row .body { flex: 1; min-width: 0; }
+    .list-row .body .l1 { font-size: 14.5px; font-weight: 500; }
+    .list-row .body .l2 { font-size: 12.5px; color: var(--text-faint); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .list-row .right { color: var(--text-faint); }
+
+    /* toast */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(var(--safe-bottom) + 24px);
+      transform: translate(-50%, 30px);
+      background: var(--accent);
+      color: var(--accent-text);
+      padding: 12px 18px;
+      border-radius: 16px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: var(--shadow-2);
+      opacity: 0;
+      transition: opacity .2s, transform .2s;
+      z-index: 50;
+      max-width: 92vw;
+      width: max-content;
+      pointer-events: none;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .toast.error {
+      background: var(--danger);
+      color: white;
+      max-width: 92vw;
+      width: 92vw;
+      padding: 14px 18px 14px 18px;
+      pointer-events: auto;
+      border-radius: 14px;
+      text-align: left;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+    .toast.error::after {
+      content: "Tap to dismiss";
+      display: block;
+      margin-top: 8px;
+      font-size: 11px;
+      opacity: .7;
+      font-family: var(--font);
+      font-style: italic;
+    }
+    .toast.success { background: var(--success); color: white; }
+
+    /* hidden helper */
+    [hidden] { display: none !important; }
+
+    /* logo */
+    .logo {
+      width: 56px; height: 56px;
+      border-radius: 14px;
+      background: var(--accent);
+      color: var(--accent-text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 24px;
+      letter-spacing: -.02em;
+      margin-bottom: 14px;
+    }
+
+    /* media: scale up on bigger screens */
+    @media (min-width: 600px) {
+      .main { padding: 20px; }
+    }
+
+    /* ============ Pylon-style refinements ============ */
+    .header { background: color-mix(in srgb, var(--bg) 78%, transparent); }
+
+    /* Avatar circles (initial + deterministic color) */
+    .avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: -.01em;
+      color: white;
+      flex-shrink: 0;
+      background: var(--accent);
+      user-select: none;
+    }
+    .avatar-sm { width: 28px; height: 28px; font-size: 11px; }
+    .avatar-xs { width: 22px; height: 22px; font-size: 10px; }
+    .avatar-system { background: var(--text-muted); }
+
+    /* Vibrant state badges */
+    .badge-open    { color: var(--success); background: var(--success-soft); border: none; }
+    .badge-closed  { color: var(--text-muted); background: var(--surface-2); border: none; }
+    .badge-pending { color: var(--warning); background: var(--warning-soft); border: none; }
+    .badge-snoozed { color: var(--info); background: var(--info-soft); border: none; }
+    .badge-on-hold { color: var(--accent); background: var(--accent-soft); border: none; }
+    .badge-new     { color: var(--accent); background: var(--accent-soft); border: none; }
+
+    /* ===== Issue card (Pylon-web inspired) ===== */
+    .issue-card {
+      display: block;
+      padding: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-1);
+      cursor: pointer;
+      transition: border-color .15s, transform .04s;
+    }
+    .issue-card + .issue-card { margin-top: 10px; }
+    .issue-card:hover { border-color: var(--accent); }
+    .issue-card:active { transform: scale(.995); }
+
+    .card-top {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: start;
+    }
+    .account-logo {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -.01em;
+      flex-shrink: 0;
+    }
+    .account-logo-empty {
+      background: var(--surface-2);
+      color: var(--text-faint);
+      font-weight: 500;
+    }
+    .card-account-empty {
+      color: var(--text-faint);
+      font-weight: 600;
+      font-style: italic;
+    }
+    .card-top-text { min-width: 0; }
+    .card-top-line1 {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      min-width: 0;
+    }
+    .card-account {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -.005em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .card-issue-num {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-faint);
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+    .card-top-line2 {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 2px;
+      min-width: 0;
+    }
+    .card-requester {
+      font-size: 13px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .card-state { flex-shrink: 0; align-self: start; }
+
+    .card-subject {
+      margin-top: 10px;
+      font-size: 14.5px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .card-subject-label {
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-right: 4px;
+    }
+
+    .card-body-preview {
+      margin-top: 4px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text-muted);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 1.45em;
+    }
+    .card-preview-placeholder {
+      color: var(--text-faint);
+      font-style: italic;
+    }
+
+    .card-footer {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .card-assignee {
+      font-weight: 600;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 60%;
+    }
+    .card-assignee em {
+      font-style: italic;
+      font-weight: 500;
+      color: var(--text-faint);
+    }
+    .card-dot { color: var(--text-faint); }
+    .card-time { color: var(--text-faint); }
+
+    /* Active filter chip — accent background */
+    .chip[aria-pressed="true"] {
+      background: var(--accent);
+      color: var(--accent-text);
+      border-color: var(--accent);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent);
+    }
+    .chip { transition: background-color .15s, color .15s, border-color .15s, box-shadow .15s; }
+
+    /* Header gets a subtle bottom border only when scrolled */
+    .header { border-bottom-color: var(--border); }
+
+    /* Bottom nav */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 20;
+      display: flex;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 8px 6px calc(var(--safe-bottom) + 8px);
+      background: color-mix(in srgb, var(--surface) 92%, transparent);
+      backdrop-filter: saturate(180%) blur(18px);
+      -webkit-backdrop-filter: saturate(180%) blur(18px);
+      border-top: 1px solid var(--border);
+    }
+    .bottom-nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 6px 4px;
+      color: var(--text-faint);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: color .15s, transform .04s;
+    }
+    .bottom-nav-btn:active { transform: scale(.96); }
+    .bottom-nav-btn[aria-current="true"] { color: var(--accent); }
+    .bottom-nav-btn svg { width: 22px; height: 22px; }
+
+    /* Rich text editor */
+    .editor-toolbar {
+      display: flex;
+      gap: 2px;
+      padding: 6px;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .tbtn {
+      min-width: 32px; height: 32px;
+      padding: 0 8px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color .12s, color .12s;
+      flex-shrink: 0;
+    }
+    .tbtn:hover { background: var(--surface-2); color: var(--text); }
+    .tbtn:active { background: var(--border); }
+    .tbtn svg { width: 16px; height: 16px; }
+    .tbtn-divider {
+      width: 1px;
+      height: 22px;
+      align-self: center;
+      background: var(--border);
+      margin: 0 3px;
+    }
+    .editor {
+      min-height: 80px;
+      max-height: 240px;
+      overflow-y: auto;
+      padding: 12px;
+      font-size: 15px;
+      line-height: 1.55;
+      outline: none;
+      color: var(--text);
+    }
+    .editor:empty::before {
+      content: attr(data-placeholder);
+      color: var(--text-faint);
+      pointer-events: none;
+    }
+    .editor p { margin: 0 0 .5em; }
+    .editor p:last-child { margin-bottom: 0; }
+    .editor ul, .editor ol { margin: .3em 0 .5em 1.2em; padding: 0; }
+    .editor a { color: var(--accent); text-decoration: underline; }
+
+    /* Refined composer */
+    .composer { margin-top: 20px; }
+    .composer-card {
+      box-shadow: var(--shadow-2);
+      border-radius: var(--radius);
+      overflow: hidden;
+      padding: 0;
+      border-color: var(--border);
+    }
+    .composer-actions {
+      padding: 8px 10px;
+      border-top: 1px solid var(--border);
+      margin-top: 0;
+    }
+    .composer-send {
+      background: var(--accent);
+      box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
+    }
+    .composer-send:hover { background: var(--accent-strong); }
+
+    /* Detail page tweaks */
+    .detail-title { font-size: 24px; }
+    .msg {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .msg-content { min-width: 0; }
+    .msg-internal {
+      background: var(--warning-soft);
+      border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+    }
+
+    /* FAB for new actions (reserved space) */
+    .fab {
+      position: fixed;
+      bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 16px);
+      right: 20px;
+      width: 54px; height: 54px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: var(--accent-text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 45%, transparent);
+      z-index: 15;
+      cursor: pointer;
+      transition: transform .08s;
+    }
+    .fab:active { transform: scale(.94); }
+
+    /* Logo update */
+    .logo {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 35%, transparent);
+    }
+
+    /* Chip count pill */
+    .chip-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 6px;
+      margin-left: 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      background: color-mix(in srgb, var(--text) 8%, transparent);
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .chip[aria-pressed="true"] .chip-count {
+      background: rgba(255,255,255,.22);
+      color: white;
+    }
+    .chip-with-avatar {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding-left: 6px;
+    }
+    .chip-with-avatar .avatar {
+      box-shadow: 0 0 0 2px var(--surface);
+    }
+    .chip[aria-pressed="true"] .avatar {
+      box-shadow: 0 0 0 2px var(--accent);
+    }
+
+    /* Issue assignee block (top-right of card) */
+    .issue-top-right {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .assignee {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      max-width: 110px;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      overflow: hidden;
+    }
+    .assignee-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 80px;
+    }
+    .assignee-empty {
+      color: var(--text-faint);
+      font-style: italic;
+      font-size: 11px;
+    }
+    .issue-time {
+      color: var(--text-faint);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    /* On very narrow screens hide the assignee name, keep the avatar */
+    @media (max-width: 380px) {
+      .assignee-name { display: none; }
+      .assignee-empty { display: none; }
+    }
+
+    /* ============ Tags ============ */
+    .tags-section { margin-top: 6px; }
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .tag-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px 4px 12px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 500;
+      max-width: 100%;
+      line-height: 1.3;
+    }
+    .tag-pill .tag-remove {
+      width: 18px; height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 14px;
+      line-height: 1;
+      color: inherit;
+      opacity: .6;
+      margin-left: 2px;
+      cursor: pointer;
+    }
+    .tag-pill .tag-remove:hover { opacity: 1; background: rgba(0,0,0,.08); }
+    @media (prefers-color-scheme: dark) {
+      .tag-pill .tag-remove:hover { background: rgba(255,255,255,.12); }
+    }
+    .tag-add {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 500;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      border: 1px dashed var(--border-strong);
+      cursor: pointer;
+      min-height: 28px;
+      transition: background-color .15s, color .15s, border-color .15s;
+    }
+    .tag-add:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+    .tag-picker {
+      margin-top: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-1);
+      overflow: hidden;
+    }
+    .tag-picker input[type="search"] {
+      border: none;
+      border-radius: 0;
+      border-bottom: 1px solid var(--border);
+      padding: 12px 14px;
+      background: transparent;
+      font-size: 14px;
+    }
+    .tag-picker input[type="search"]:focus { box-shadow: none; border-color: var(--border); }
+    .tag-options {
+      max-height: 240px;
+      overflow-y: auto;
+      padding: 4px;
+    }
+    .tag-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+      transition: background-color .12s;
+    }
+    .tag-option:hover { background: var(--surface-2); }
+    .tag-option:active { background: var(--surface-3); }
+    .tag-swatch {
+      width: 14px; height: 14px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    /* Tags on issue list cards (small, dense) */
+    .issue-item .tag-pill { font-size: 11px; padding: 1px 8px; }
+
+    /* Account name badge on issue cards */
+    .account-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-soft);
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      line-height: 1.4;
+    }
+    .account-badge svg { width: 11px; height: 11px; flex-shrink: 0; opacity: .8; }
+    .issue-requester {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .account-badge { color: var(--text); background: color-mix(in srgb, var(--accent) 20%, transparent); }
+    }
+
+    /* ============ Sign-in: how-to panel + advanced collapse ============ */
+    .help-panel {
+      margin-top: 10px;
+      padding: 12px 14px 14px;
+      background: var(--accent-soft);
+      border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .help-panel code {
+      background: rgba(0,0,0,.06);
+      padding: 0 4px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .help-panel code { background: rgba(255,255,255,.08); }
+    }
+    .help-panel a { color: var(--accent); font-weight: 600; }
+    .btn-link {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 4px 0;
+    }
+    .btn-link:hover { color: var(--accent); }
+    .advanced-section { padding-top: 4px; border-top: 1px dashed var(--border); }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- ============ HEADER (dynamic) ============ -->
+    <header class="header" id="header">
+      <button class="icon-btn" id="hdrLeft" hidden aria-label="Back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="header-title" id="hdrTitle">Pylon</div>
+      <button class="icon-btn" id="hdrRight" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </header>
+
+    <main class="main" id="main">
+      <!-- views injected here -->
+    </main>
+  </div>
+
+  <nav class="bottom-nav" id="bottomNav" hidden>
+    <button class="bottom-nav-btn" data-nav="list" aria-current="true" aria-label="Inbox">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+      <span>Inbox</span>
+    </button>
+    <button class="bottom-nav-btn" data-nav="search" aria-label="Search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+    </button>
+    <button class="bottom-nav-btn" data-nav="settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>
+      <span>Me</span>
+    </button>
+  </nav>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    // ============ Config / Storage ============
+    const STORAGE_KEY = 'pylonMobile.config.v1';
+    const DEFAULT_BASE = 'https://api.usepylon.com';
+
+    const cfg = loadConfig();
+
+    function loadConfig() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const defaults = { apiKey: '', base: DEFAULT_BASE, proxy: '', signature: '' };
+        if (!raw) return defaults;
+        return Object.assign(defaults, JSON.parse(raw));
+      } catch {
+        return { apiKey: '', base: DEFAULT_BASE, proxy: '', signature: '' };
+      }
+    }
+    function saveConfig() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+    }
+    function clearConfig() {
+      localStorage.removeItem(STORAGE_KEY);
+      cfg.apiKey = '';
+      cfg.base = DEFAULT_BASE;
+      cfg.proxy = '';
+    }
+
+    // ============ API ============
+    function apiUrl(path, query) {
+      const base = (cfg.proxy && cfg.proxy.trim()) ? cfg.proxy.replace(/\/$/, '') : cfg.base.replace(/\/$/, '');
+      let url = base + path;
+      if (query) {
+        const qs = new URLSearchParams();
+        for (const [k, v] of Object.entries(query)) {
+          if (v === undefined || v === null || v === '') continue;
+          qs.set(k, v);
+        }
+        const s = qs.toString();
+        if (s) url += '?' + s;
+      }
+      return url;
+    }
+    async function api(method, path, { query, body } = {}) {
+      if (!cfg.apiKey) throw new Error('Missing API key');
+      const url = apiUrl(path, query);
+      const started = Date.now();
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': 'Bearer ' + cfg.apiKey,
+          'Accept': 'application/json',
+          ...(body ? { 'Content-Type': 'application/json' } : {})
+        },
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const text = await res.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = { _raw: text }; }
+      logCall({
+        method, path, status: res.status, ok: res.ok,
+        ms: Date.now() - started,
+        excerpt: text ? text.slice(0, 600) : '',
+      });
+      if (!res.ok) {
+        // Surface Pylon's actual error message verbatim
+        const inner = data && (data.error || data.message || (data.errors && JSON.stringify(data.errors))) || text || '';
+        const err = new Error(`HTTP ${res.status}${inner ? ` — ${String(inner).slice(0, 240)}` : ''}`);
+        err.status = res.status;
+        err.body = data;
+        err.endpoint = `${method} ${path}`;
+        throw err;
+      }
+      return data;
+    }
+
+    // Pylon endpoint helpers — see https://docs.usepylon.com/pylon-docs/developer/api/api-reference
+    const Pylon = {
+      me: () => api('GET', '/me'),
+      listIssues: (q) => api('GET', '/issues', { query: q }),
+      getIssue: (id) => api('GET', `/issues/${encodeURIComponent(id)}`),
+      listMessages: (id) => api('GET', `/issues/${encodeURIComponent(id)}/messages`),
+      listMessagesAlt: (id) => api('GET', '/messages', { query: { issue_id: id } }),
+      reply: (id, payload) => api('POST', `/issues/${encodeURIComponent(id)}/messages`, { body: payload }),
+      replyAlt: (id, payload) => api('POST', '/messages', { body: Object.assign({ issue_id: id }, payload) }),
+      updateIssue: (id, body) => api('PATCH', `/issues/${encodeURIComponent(id)}`, { body }),
+      listUsers: () => api('GET', '/users'),
+      listContacts: () => api('GET', '/contacts'),
+      getContact: (id) => api('GET', `/contacts/${encodeURIComponent(id)}`),
+      listTags: () => api('GET', '/tags'),
+      listAccounts: (q) => api('GET', '/accounts', { query: q }),
+      getAccount: (id) => api('GET', `/accounts/${encodeURIComponent(id)}`),
+      // Reply / note / thread endpoints (Pylon docs)
+      replyPublic: (id, body) => api('POST', `/issues/${encodeURIComponent(id)}/reply`, { body }),
+      postNote: (id, body) => api('POST', `/issues/${encodeURIComponent(id)}/note`, { body }),
+      createThread: (id, body) => api('POST', `/issues/${encodeURIComponent(id)}/threads`, { body }),
+      listThreads: (id) => api('GET', `/issues/${encodeURIComponent(id)}/threads`),
+    };
+
+    // Tag cache
+    const tagCache = { tags: [], loaded: false, loading: null };
+    async function ensureTagsLoaded() {
+      if (tagCache.loaded) return tagCache.tags;
+      if (tagCache.loading) return tagCache.loading;
+      tagCache.loading = (async () => {
+        try {
+          const r = await Pylon.listTags();
+          const list = extractList(r);
+          // Normalize — accept array of strings or array of {name,id,color}
+          tagCache.tags = list.map(t => typeof t === 'string' ? { name: t } : t).filter(t => t && (t.name || t.value || t.label));
+        } catch {
+          tagCache.tags = [];
+        } finally {
+          tagCache.loaded = true;
+          tagCache.loading = null;
+        }
+        return tagCache.tags;
+      })();
+      return tagCache.loading;
+    }
+    function tagNameOf(t) { return (t && (t.name || t.value || t.label)) || ''; }
+
+    // Tiny in-memory cache so author UUIDs resolve to names without re-fetching.
+    const peopleCache = { users: {}, contacts: {}, loaded: false };
+    const accountCache = { byId: {}, loaded: false, loading: null };
+
+    async function ensurePeopleLoaded() {
+      if (peopleCache.loaded) return;
+      peopleCache.loaded = true; // attempt only once per session
+      try {
+        const u = await Pylon.listUsers().catch(() => null);
+        const us = extractList(u) || [];
+        for (const x of us) {
+          if (x && x.id) peopleCache.users[x.id] = x;
+        }
+      } catch {}
+      try {
+        const c = await Pylon.listContacts().catch(() => null);
+        const cs = extractList(c) || [];
+        for (const x of cs) {
+          if (x && x.id) peopleCache.contacts[x.id] = x;
+        }
+      } catch {}
+    }
+
+    async function ensureAccountsLoaded() {
+      if (accountCache.loaded) return accountCache.byId;
+      if (accountCache.loading) return accountCache.loading;
+      accountCache.loading = (async () => {
+        try {
+          // Paginate through Pylon's /accounts using cursor — Pylon caps a single
+          // page at 100; we keep walking until has_next_page is false or we hit a
+          // sanity cap to avoid runaway loops on huge workspaces.
+          let cursor = null;
+          let pages = 0;
+          while (pages < 20) { // up to 20 * 100 = 2000 accounts
+            const resp = await Pylon.listAccounts({ limit: 100, cursor }).catch(() => null);
+            if (!resp) break;
+            const list = extractList(resp) || [];
+            for (const a of list) {
+              if (a && a.id) accountCache.byId[a.id] = a;
+            }
+            // Detect next-cursor in common shapes
+            const next = resp.cursor || (resp.data && resp.data.cursor) || null;
+            const hasNext = (typeof resp.has_next_page === 'boolean' ? resp.has_next_page
+                            : (typeof (resp.data && resp.data.has_next_page) === 'boolean' ? resp.data.has_next_page
+                            : !!next));
+            if (!hasNext || !next || list.length === 0) break;
+            cursor = next;
+            pages++;
+          }
+        } catch {} finally {
+          accountCache.loaded = true;
+          accountCache.loading = null;
+        }
+        return accountCache.byId;
+      })();
+      return accountCache.loading;
+    }
+
+    // Lazy single-account fetch for accounts that didn't appear in the bulk list
+    const accountFetchInFlight = {}; // id -> Promise
+    function fetchAccountIfMissing(id, onReady) {
+      if (!id) return;
+      if (accountCache.byId[id]) return; // already have it
+      if (accountFetchInFlight[id]) {
+        accountFetchInFlight[id].then(onReady);
+        return;
+      }
+      accountFetchInFlight[id] = Pylon.getAccount(id).then(r => {
+        const account = (r && (r.data || r.account || r)) || null;
+        if (account && account.id) {
+          accountCache.byId[account.id] = account;
+        } else if (account && !account.id) {
+          // Pylon may return account without echoing the id; store under the requested id
+          accountCache.byId[id] = Object.assign({ id }, account);
+        }
+        return accountCache.byId[id];
+      }).catch(() => null).finally(() => {
+        delete accountFetchInFlight[id];
+      });
+      accountFetchInFlight[id].then(onReady);
+    }
+
+    function resolvePerson(id, type) {
+      if (!id) return null;
+      if (type === 'user' && peopleCache.users[id]) return peopleCache.users[id];
+      if (type === 'contact' && peopleCache.contacts[id]) return peopleCache.contacts[id];
+      return peopleCache.users[id] || peopleCache.contacts[id] || null;
+    }
+
+    function resolveAccountName(issue) {
+      if (!issue) return '';
+      if (issue.account && (issue.account.name || issue.account.title || issue.account.display_name)) {
+        return issue.account.name || issue.account.title || issue.account.display_name;
+      }
+      if (issue.account_name) return issue.account_name;
+      const aid = issue.account_id || (issue.account && issue.account.id);
+      if (aid && accountCache.byId[aid]) {
+        const a = accountCache.byId[aid];
+        return a.name || a.title || a.display_name || a.company_name || '';
+      }
+      return '';
+    }
+
+    // Simple network log so the user can debug from Settings.
+    const netLog = [];
+    function logCall(entry) {
+      netLog.unshift({ ...entry, at: Date.now() });
+      if (netLog.length > 50) netLog.length = 50;
+    }
+
+    // Avatar helpers (initial + deterministic background color)
+    const AVATAR_PALETTE = ['#6e56cf','#e5484d','#30a46c','#4f86ec','#f5a524','#d6409f','#0091ff','#e54666','#11b3a4','#7c66dc','#dc7e22','#0d99a3'];
+    function avatarColor(seed) {
+      const s = String(seed || '');
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+      return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
+    }
+    function initialsOf(name) {
+      if (!name) return '?';
+      const parts = String(name).trim().split(/\s+/).slice(0, 2);
+      return parts.map(p => p[0] || '').join('').toUpperCase() || '?';
+    }
+    function renderAvatar(name, opts = {}) {
+      const seed = opts.seed || name || '?';
+      const size = opts.size || ''; // '', 'sm', 'xs'
+      const sysClass = opts.system ? ' avatar-system' : '';
+      const color = opts.system ? '' : avatarColor(seed);
+      return `<div class="avatar${size ? ' avatar-' + size : ''}${sysClass}" ${color ? `style="background:${color};"` : ''}>${escapeHtml(initialsOf(name))}</div>`;
+    }
+
+    // ============ State / Router ============
+    const state = {
+      view: 'list',
+      allIssues: [],   // raw from server, used for counts + assignee list
+      issues: [],      // post-filter, displayed
+      filter: { state: '', assignee: 'all', q: '' },
+      stateCounts: {}, // { new: 2, waiting_on_you: 18, ... }
+      assigneeStats: [], // [{id, name, count}, ...] top assignees
+      issue: null,
+      messages: [],
+      loading: false,
+      error: null,
+      me: null,
+      cursor: null,
+    };
+
+    const main = document.getElementById('main');
+    const hdrTitle = document.getElementById('hdrTitle');
+    const hdrLeft = document.getElementById('hdrLeft');
+    const hdrRight = document.getElementById('hdrRight');
+    const bottomNav = document.getElementById('bottomNav');
+
+    function navigate(view, opts = {}) {
+      state.view = view;
+      state.error = null;
+      if (opts.issue !== undefined) state.issue = opts.issue;
+      render();
+      if (view === 'list' && !state.issues.length) loadIssues();
+      if (view === 'detail' && state.issue) loadIssueDetail(state.issue.id || state.issue);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+
+    function render() {
+      // Bottom nav visibility
+      const showNav = !!cfg.apiKey && (state.view === 'list' || state.view === 'settings');
+      bottomNav.hidden = !showNav;
+      document.querySelector('.app').classList.toggle('has-nav', showNav);
+      // Update aria-current on tabs
+      if (showNav) {
+        const map = { list: 'list', search: 'list', settings: 'settings' };
+        const current = map[state.view] || state.view;
+        bottomNav.querySelectorAll('.bottom-nav-btn').forEach(b => {
+          b.setAttribute('aria-current', b.dataset.nav === current ? 'true' : 'false');
+        });
+      }
+
+      // Header
+      if (!cfg.apiKey) {
+        hdrTitle.textContent = 'Pylon Mobile';
+        hdrLeft.hidden = true;
+        hdrRight.hidden = true;
+      } else if (state.view === 'list') {
+        hdrTitle.textContent = 'Inbox';
+        hdrLeft.hidden = true;
+        hdrRight.hidden = true;
+      } else if (state.view === 'detail') {
+        hdrTitle.textContent = state.issue ? `#${state.issue.number || state.issue.id || ''}` : 'Issue';
+        hdrLeft.hidden = false;
+        hdrRight.hidden = true;
+      } else if (state.view === 'settings') {
+        hdrTitle.textContent = 'Settings';
+        hdrLeft.hidden = false;
+        hdrRight.hidden = true;
+      } else if (state.view === 'netlog') {
+        hdrTitle.textContent = 'Network log';
+        hdrLeft.hidden = false;
+        hdrRight.hidden = true;
+      } else if (state.view === 'signature') {
+        hdrTitle.textContent = 'Email signature';
+        hdrLeft.hidden = false;
+        hdrRight.hidden = true;
+      }
+
+      // Body
+      if (!cfg.apiKey) return renderSetup();
+      if (state.view === 'list') return renderList();
+      if (state.view === 'detail') return renderDetail();
+      if (state.view === 'settings') return renderSettings();
+      if (state.view === 'netlog') return renderNetLog();
+      if (state.view === 'signature') return renderSignature();
+    }
+
+    // ============ Views ============
+
+    function renderSetup() {
+      main.innerHTML = `
+        <div class="stack-20" style="padding-top: 24px;">
+          <div class="center">
+            <div class="logo">P</div>
+            <h1 style="margin:0 0 6px; font-size:24px; letter-spacing:-.02em;">Pylon Mobile</h1>
+            <p class="muted small" style="max-width: 380px; margin: 0 auto;">
+              A clean, mobile-first interface for your Pylon support inbox. Sign in with <strong>your own</strong> Pylon API key — replies will be attributed to you.
+            </p>
+          </div>
+          <div class="card stack-16">
+            <div>
+              <label class="label" for="setupKey">Your Pylon API key</label>
+              <input id="setupKey" type="password" autocomplete="off" spellcheck="false" placeholder="pylon_api_..." />
+              <div class="help">
+                Don't have one yet? <a href="#" id="howGetKey">How to get my key →</a>
+              </div>
+              <div id="howGetKeyPanel" class="help-panel" hidden>
+                <ol style="margin: 6px 0 0 18px; padding: 0; line-height: 1.7;">
+                  <li>Open <a href="https://app.usepylon.com" target="_blank" rel="noopener">app.usepylon.com</a> and sign in with Google as usual.</li>
+                  <li>Click your avatar → <strong>Settings</strong> (or go to <em>Settings</em> in the sidebar).</li>
+                  <li>Find <strong>API Keys</strong> (under Developers / Integrations).</li>
+                  <li>Click <strong>Create API Key</strong>. Name it something like <em>"My phone"</em>.</li>
+                  <li>Copy the key (starts with <code>pylon_api_</code>) and paste it above.</li>
+                </ol>
+                <p class="tiny muted" style="margin: 10px 0 0;">Your key represents <strong>you</strong> — anything you do in this app is attributed to your Pylon account.</p>
+              </div>
+            </div>
+            <div class="advanced-section">
+              <button type="button" class="btn-link" id="toggleAdvanced">Advanced settings ▾</button>
+              <div id="advancedPanel" hidden style="margin-top: 12px;" class="stack-16">
+                <div>
+                  <label class="label" for="setupBase">API base URL</label>
+                  <input id="setupBase" type="url" autocomplete="off" spellcheck="false" value="${escapeAttr(cfg.base)}" />
+                  <div class="help">Default: <code>https://api.usepylon.com</code></div>
+                </div>
+                <div>
+                  <label class="label" for="setupProxy">CORS proxy URL</label>
+                  <input id="setupProxy" type="url" autocomplete="off" spellcheck="false" value="${escapeAttr(cfg.proxy || '')}" placeholder="https://your-proxy.workers.dev" />
+                  <div class="help">
+                    Required for most browsers. Ask your admin for the shared CORS proxy URL, or see the README to deploy one.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="setupSave">Sign in</button>
+          </div>
+          <p class="tiny faint center" style="max-width: 360px; margin: 0 auto;">Your key is stored only on this device. It never leaves your browser except in requests to Pylon.</p>
+        </div>
+      `;
+      document.getElementById('howGetKey').onclick = (e) => {
+        e.preventDefault();
+        const p = document.getElementById('howGetKeyPanel');
+        p.hidden = !p.hidden;
+      };
+      document.getElementById('toggleAdvanced').onclick = (e) => {
+        e.preventDefault();
+        const p = document.getElementById('advancedPanel');
+        p.hidden = !p.hidden;
+        e.currentTarget.textContent = p.hidden ? 'Advanced settings ▾' : 'Advanced settings ▴';
+        // If the proxy URL is blank, prefill from a per-team default the user might pre-populate later
+      };
+      // If the proxy is already set (admin pre-configured), keep advanced collapsed.
+      // If not, auto-open it so the user sees the CORS field.
+      if (!cfg.proxy) {
+        document.getElementById('advancedPanel').hidden = false;
+        document.getElementById('toggleAdvanced').textContent = 'Advanced settings ▴';
+      }
+      const $key = document.getElementById('setupKey');
+      const $save = document.getElementById('setupSave');
+      $key.focus();
+      const submit = async () => {
+        const key = $key.value.trim();
+        const $baseEl = document.getElementById('setupBase');
+        const $proxyEl = document.getElementById('setupProxy');
+        const base = ($baseEl && $baseEl.value.trim()) || DEFAULT_BASE;
+        const proxy = ($proxyEl && $proxyEl.value.trim()) || '';
+        if (!key) { toast('Enter your Pylon API key', 'error'); return; }
+        $save.disabled = true;
+        $save.innerHTML = '<span class="spinner"></span> Verifying…';
+        cfg.apiKey = key; cfg.base = base; cfg.proxy = proxy;
+        try {
+          const me = await Pylon.me();
+          state.me = me && (me.data || me);
+          saveConfig();
+          const name = (state.me && (state.me.name || state.me.email)) || '';
+          toast(name ? `Welcome, ${name.split(/\s+/)[0]} 👋` : 'Signed in', 'success');
+          navigate('list');
+        } catch (e) {
+          cfg.apiKey = ''; // don't persist a bad key
+          $save.disabled = false;
+          $save.textContent = 'Sign in';
+          toast(friendlyError(e), 'error');
+        }
+      };
+      $save.addEventListener('click', submit);
+      $key.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    }
+
+    function renderList() {
+      main.innerHTML = `
+        <div class="search">
+          <span class="search-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+          <input id="searchInput" type="search" placeholder="Search issues, subjects, requesters…" value="${escapeAttr(state.filter.q)}" />
+        </div>
+        <div class="filter-bar" id="filterBar">${renderStateChips()}</div>
+        <div class="filter-bar" id="assigneeBar" style="margin-top: -4px;">${renderAssigneeChips()}</div>
+        <div id="listContainer">
+          ${renderListBody()}
+        </div>
+      `;
+      // wire
+      const $search = document.getElementById('searchInput');
+      let t = null;
+      $search.addEventListener('input', (e) => {
+        state.filter.q = e.target.value;
+        clearTimeout(t);
+        t = setTimeout(() => reapplyFilters(), 200);
+      });
+      $search.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); clearTimeout(t); reapplyFilters(); }
+      });
+
+      const $filterBar = document.getElementById('filterBar');
+      $filterBar.addEventListener('click', (e) => {
+        const btn = e.target.closest('.chip');
+        if (!btn) return;
+        state.filter.state = btn.dataset.state || '';
+        reapplyFilters();
+      });
+
+      const $assigneeBar = document.getElementById('assigneeBar');
+      $assigneeBar.addEventListener('click', (e) => {
+        const btn = e.target.closest('.chip');
+        if (!btn) return;
+        state.filter.assignee = btn.dataset.assignee || 'all';
+        reapplyFilters();
+      });
+
+      const list = document.getElementById('listContainer');
+      list.addEventListener('click', (e) => {
+        const item = e.target.closest('.issue-card');
+        if (!item) return;
+        const id = item.dataset.id;
+        const issue = state.issues.find(i => String(i.id) === id || String(i.number) === id);
+        navigate('detail', { issue: issue || { id } });
+      });
+      attachBodyObservers();
+    }
+
+    function renderStateChips() {
+      const counts = state.stateCounts || {};
+      const total = counts._total || 0;
+      const items = [
+        ['', 'All', total],
+        ['new', 'New', counts.new || 0],
+        ['waiting_on_you', 'On you', counts.waiting_on_you || 0],
+        ['waiting_on_customer', 'On customer', counts.waiting_on_customer || 0],
+        ['on_hold', 'On hold', counts.on_hold || 0],
+        ['closed', 'Closed', counts.closed || 0],
+      ];
+      return items.map(([k, label, c]) => `
+        <button class="chip" data-state="${k}" aria-pressed="${state.filter.state === k}">
+          ${escapeHtml(label)}<span class="chip-count">${c}</span>
+        </button>
+      `).join('');
+    }
+
+    function renderAssigneeChips() {
+      const me = state.me || {};
+      const meChip = `
+        <button class="chip chip-with-avatar" data-assignee="me" aria-pressed="${state.filter.assignee === 'me'}" title="Assigned to me">
+          ${renderAvatar(me.name || me.email || 'Me', { seed: me.id || me.email, size: 'xs' })}
+          <span>Me</span>
+        </button>`;
+      const anyoneChip = `
+        <button class="chip" data-assignee="all" aria-pressed="${state.filter.assignee === 'all'}">Anyone</button>`;
+      const unassigned = `
+        <button class="chip" data-assignee="unassigned" aria-pressed="${state.filter.assignee === 'unassigned'}">Unassigned</button>`;
+
+      const others = (state.assigneeStats || [])
+        .filter(a => !me.id || a.id !== me.id)
+        .map(a => {
+          const name = a.name || resolveAssigneeName(a.id) || a.id.slice(0, 6);
+          const first = (name || '').split(/\s+/)[0] || name;
+          return `
+            <button class="chip chip-with-avatar" data-assignee="${escapeAttr(a.id)}" aria-pressed="${state.filter.assignee === a.id}" title="${escapeAttr(name)}">
+              ${renderAvatar(name, { seed: a.id, size: 'xs' })}
+              <span>${escapeHtml(first)}</span>
+              <span class="chip-count">${a.count}</span>
+            </button>`;
+        }).join('');
+      return anyoneChip + meChip + unassigned + others;
+    }
+
+    function resolveAssigneeName(id) {
+      const p = resolvePerson(id, 'user');
+      return p ? (p.name || p.email) : '';
+    }
+
+    function renderListBody() {
+      if (state.loading && !state.issues.length) {
+        return `<div class="state-row"><span class="spinner"></span> Loading issues…</div>`;
+      }
+      if (state.error) {
+        return `<div class="card" style="border-color: var(--danger-soft); background: var(--danger-soft); color: var(--danger);">
+          <div style="font-weight: 600; margin-bottom: 6px;">Couldn't load issues</div>
+          <div class="small">${escapeHtml(state.error)}</div>
+          <div style="margin-top: 12px;"><button class="btn" id="retryBtn">Retry</button></div>
+        </div>`;
+      }
+      if (!state.issues.length) {
+        return `<div class="state">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <div style="font-weight: 600; color: var(--text);">No issues found</div>
+          <div class="small">Try a different filter or search.</div>
+        </div>`;
+      }
+      return `<ul class="issue-list">${state.issues.map(renderIssueItem).join('')}</ul>` +
+        (state.loading ? `<div class="state-row"><span class="spinner"></span> Loading…</div>` : '');
+    }
+
+    function renderIssueItem(issue) {
+      const id = issue.id || String(issue.number || '');
+      const num = issue.number != null ? `#${issue.number}` : (issue.id || '').slice(0, 8);
+      const title = issue.title || issue.subject || '(no subject)';
+      const requester = (issue.requester && (issue.requester.name || issue.requester.email))
+        || (issue.contact && (issue.contact.name || issue.contact.email))
+        || issue.requester_name || '';
+      const requesterId = (issue.requester && issue.requester.id) || requester || id;
+      const account = resolveAccountName(issue);
+      const rawAccountId = issue.account_id || (issue.account && issue.account.id) || '';
+      const accountId = rawAccountId || account;
+      const stateStr = (issue.state || issue.status || '').toString();
+      const created = issue.created_at;
+      const assigneeName = assigneeNameOf(issue);
+
+      // If the account name is missing but we have an ID, fire a lazy single fetch.
+      // When it arrives, find this card in the DOM and update the account name.
+      if (!account && rawAccountId) {
+        fetchAccountIfMissing(rawAccountId, () => {
+          const cards = document.querySelectorAll(`.issue-card[data-id="${CSS.escape(id)}"] .card-account`);
+          const cached = accountCache.byId[rawAccountId];
+          const name = cached && (cached.name || cached.title || cached.display_name);
+          if (name) cards.forEach(el => { el.textContent = name; });
+        });
+      }
+
+      // Decide what to show. If the issue genuinely has no account_id, it's a
+      // system / automated ticket — say "No account" in muted style.
+      // If we have an account_id but no name yet, show a subtle "Loading…" while
+      // the lazy fetch resolves it.
+      const displayedAccount = account
+        ? account
+        : (rawAccountId ? 'Loading…' : 'No account');
+      const accountInitial = account ? account.trim().charAt(0).toUpperCase()
+                                     : (rawAccountId ? '?' : '·');
+      const accountLogo = `
+        <div class="account-logo${account ? '' : ' account-logo-empty'}" ${account ? `style="background:${avatarColor(accountId)};"` : ''} title="${escapeAttr(displayedAccount)}">
+          ${escapeHtml(accountInitial)}
+        </div>`;
+
+      // Cached body preview (filled in lazily when the card scrolls into view)
+      const cachedPreview = issueBodyPreviewCache[id] || '';
+
+      return `
+        <li class="issue-card" data-id="${escapeAttr(id)}">
+          <div class="card-top">
+            ${accountLogo}
+            <div class="card-top-text">
+              <div class="card-top-line1">
+                <span class="card-account ${account ? '' : 'card-account-empty'}">${escapeHtml(displayedAccount)}</span>
+                <span class="card-issue-num">${escapeHtml(num)}</span>
+              </div>
+              <div class="card-top-line2">
+                ${requester ? renderAvatar(requester, { seed: requesterId, size: 'xs' }) : ''}
+                <span class="card-requester">${escapeHtml(requester || '—')}</span>
+              </div>
+            </div>
+            <div class="card-state">${stateStr ? renderStateBadge(stateStr) : ''}</div>
+          </div>
+
+          <div class="card-subject"><span class="card-subject-label">Subject:</span> ${escapeHtml(title)}</div>
+
+          <div class="card-body-preview" data-preview-for="${escapeAttr(id)}">
+            ${cachedPreview ? escapeHtml(cachedPreview) : '<span class="card-preview-placeholder">…</span>'}
+          </div>
+
+          <div class="card-footer">
+            <span class="card-assignee">${assigneeName ? escapeHtml(assigneeName) : '<em>Unassigned</em>'}</span>
+            <span class="card-dot">·</span>
+            <span class="card-time">${created ? `Created ${escapeHtml(timeAgo(created))} ago` : ''}</span>
+          </div>
+        </li>
+      `;
+    }
+
+    // Lazy-load a short body preview for each visible card from GET /issues/{id}.
+    // Populated on first display; cached for the session.
+    const issueBodyPreviewCache = {};
+    let bodyObserver = null;
+
+    function htmlToPreview(html, max = 160) {
+      if (!html) return '';
+      // Strip tags
+      const tmp = document.createElement('div');
+      tmp.innerHTML = String(html);
+      const text = (tmp.textContent || tmp.innerText || '')
+        .replace(/ /g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return text.length > max ? text.slice(0, max).trim() + '…' : text;
+    }
+
+    function attachBodyObservers() {
+      if (bodyObserver) {
+        try { bodyObserver.disconnect(); } catch {}
+      }
+      if (typeof IntersectionObserver === 'undefined') return;
+      bodyObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const card = entry.target;
+          const cardId = card.dataset.id;
+          bodyObserver.unobserve(card);
+          if (!cardId || issueBodyPreviewCache[cardId]) {
+            updateCardPreview(card, issueBodyPreviewCache[cardId] || '');
+            continue;
+          }
+          // Fetch issue body (single request per card)
+          Pylon.getIssue(cardId).then(r => {
+            const issue = (r && (r.data || r.issue || r)) || {};
+            const preview = htmlToPreview(issue.body_html || issue.body_text || issue.body || '', 160);
+            issueBodyPreviewCache[cardId] = preview;
+            updateCardPreview(card, preview);
+          }).catch(() => {
+            // Silent — preview just stays as "..."
+          });
+        }
+      }, { rootMargin: '300px 0px', threshold: 0.01 });
+      // Observe each rendered card
+      document.querySelectorAll('.issue-card').forEach(c => bodyObserver.observe(c));
+    }
+
+    function updateCardPreview(card, preview) {
+      const el = card.querySelector('.card-body-preview');
+      if (!el) return;
+      if (preview) {
+        el.textContent = preview;
+      } else {
+        el.innerHTML = '<span class="card-preview-placeholder">No preview available</span>';
+      }
+    }
+
+    function renderStateBadge(s) {
+      const k = String(s || '').toLowerCase();
+      let cls = '';
+      if (k === 'new') cls = 'badge-new';
+      else if (k === 'on_hold') cls = 'badge-on-hold';
+      else if (k.startsWith('waiting_on_you')) cls = 'badge-pending';
+      else if (k.startsWith('waiting_on_customer')) cls = 'badge-snoozed';
+      else if (k.includes('clos') || k.includes('resol')) cls = 'badge-closed';
+      else if (k.includes('open')) cls = 'badge-open';
+      else cls = 'badge-snoozed';
+      return `<span class="badge ${cls}"><span class="badge-dot"></span>${escapeHtml(prettyState(s))}</span>`;
+    }
+    function prettyState(s) { return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
+
+    function renderDetail() {
+      if (state.loading && !state.messages.length) {
+        main.innerHTML = `<div class="state-row"><span class="spinner"></span> Loading issue…</div>`;
+        return;
+      }
+      if (state.error) {
+        main.innerHTML = `<div class="card" style="border-color: var(--danger-soft); background: var(--danger-soft); color: var(--danger);">
+          <div style="font-weight: 600; margin-bottom: 6px;">Couldn't load this issue</div>
+          <div class="small">${escapeHtml(state.error)}</div>
+        </div>`;
+        return;
+      }
+      const issue = state.issue || {};
+      const title = issue.title || issue.subject || '(no subject)';
+      const num = issue.number != null ? `#${issue.number}` : (issue.id || '').slice(0, 8);
+      const stateStr = (issue.state || issue.status || '').toString();
+      const requester = (issue.requester && (issue.requester.name || issue.requester.email))
+        || (issue.contact && (issue.contact.name || issue.contact.email)) || '';
+      const account = resolveAccountName(issue);
+      const created = issue.created_at;
+
+      const stateChips = ['new','waiting_on_you','waiting_on_customer','on_hold','closed'];
+      main.innerHTML = `
+        <div class="detail-header">
+          <div class="issue-top" style="margin-bottom: 4px;">
+            <span class="issue-num">${escapeHtml(num)}</span>
+            ${stateStr ? renderStateBadge(stateStr) : ''}
+          </div>
+          <h1 class="detail-title">${escapeHtml(title)}</h1>
+          <div class="detail-meta">
+            ${requester ? `<span><strong>${escapeHtml(requester)}</strong></span>` : ''}
+            ${account ? `<span>${escapeHtml(account)}</span>` : ''}
+            ${created ? `<span>${escapeHtml(formatDate(created))}</span>` : ''}
+          </div>
+
+          <div class="state-row-label">Change status</div>
+          <div class="filter-bar" id="stateChips" style="margin-top:6px;">
+            ${stateChips.map(s => `
+              <button class="chip" data-state="${s}" aria-pressed="${stateStr === s}">${escapeHtml(prettyState(s))}</button>
+            `).join('')}
+          </div>
+
+          <div class="state-row-label" style="margin-top:14px;">Tags</div>
+          <div id="tagsSection" class="tags-section">${renderTagsSection()}</div>
+        </div>
+
+        <ul class="thread" id="thread">
+          ${state.messages.map(renderMessage).join('') || `<div class="state-row faint">No messages yet</div>`}
+        </ul>
+
+        <div class="composer">
+          <div class="composer-card card" style="padding:0;">
+            <div id="recipientsBox" class="recipients-box" hidden></div>
+            <div class="editor-toolbar" role="toolbar" aria-label="Formatting">
+              <button type="button" class="tbtn" data-cmd="bold" title="Bold (Ctrl/⌘+B)"><b>B</b></button>
+              <button type="button" class="tbtn" data-cmd="italic" title="Italic (Ctrl/⌘+I)"><i>I</i></button>
+              <button type="button" class="tbtn" data-cmd="underline" title="Underline (Ctrl/⌘+U)"><span style="text-decoration:underline;">U</span></button>
+              <button type="button" class="tbtn" data-cmd="strikeThrough" title="Strikethrough"><span style="text-decoration:line-through;">S</span></button>
+              <span class="tbtn-divider"></span>
+              <button type="button" class="tbtn" data-cmd="insertUnorderedList" title="Bulleted list">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </button>
+              <button type="button" class="tbtn" data-cmd="insertOrderedList" title="Numbered list">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+              </button>
+              <span class="tbtn-divider"></span>
+              <button type="button" class="tbtn" data-action="link" title="Insert link">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              </button>
+              <button type="button" class="tbtn" data-cmd="formatBlock" data-arg="blockquote" title="Quote">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2-1 0-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 .999 0 1 0 1 1v1c0 1-1 2-2 2-1 0-1 .008-1 1.031V20c0 1 0 1 1 1z"/></svg>
+              </button>
+              <button type="button" class="tbtn" data-action="clear" title="Clear formatting">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><line x1="5" y1="20" x2="19" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
+              </button>
+            </div>
+            <div id="replyEditor" class="editor" contenteditable="true" data-placeholder="Write a reply… (try Ctrl/⌘+B for bold)"></div>
+            <div class="composer-actions">
+              <button type="button" class="toggle" id="internalToggle" data-on="false" title="Internal note (visible to your team only)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span id="internalLabel">Public reply</span>
+                <input type="checkbox" id="internalCheck" style="display:none" />
+              </button>
+              <button type="button" class="thread-chip" id="threadPickerBtn" hidden title="Choose which internal thread">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                <span id="threadPickerLabel">Default thread</span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6;"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <button type="button" class="composer-send" id="sendReply" disabled aria-label="Send reply">
+                <span id="sendLabel">Send</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </div>
+          <div id="threadPickerPanel" class="thread-picker" hidden></div>
+          </div>
+        </div>
+      `;
+
+      // State chips click handler
+      const $stateChips = document.getElementById('stateChips');
+      if ($stateChips) {
+        $stateChips.addEventListener('click', (e) => {
+          const btn = e.target.closest('.chip');
+          if (!btn) return;
+          const ns = btn.dataset.state;
+          if (ns && ns !== stateStr) changeIssueState(ns);
+        });
+      }
+
+      // Tags section
+      bindTagsSection();
+      // Lazy-load the list of available tags in the background
+      ensureTagsLoaded().then(() => { if (state.view === 'detail') patchTagsSection(); });
+
+      const $editor = document.getElementById('replyEditor');
+      const $send = document.getElementById('sendReply');
+      const $toggle = document.getElementById('internalToggle');
+      const $check = document.getElementById('internalCheck');
+      const $internalLabel = document.getElementById('internalLabel');
+      const $sendLabel = document.getElementById('sendLabel');
+
+      // Wire toolbar
+      const $toolbar = document.querySelector('.editor-toolbar');
+      $toolbar.addEventListener('mousedown', (e) => {
+        // Prevent the editor from losing focus when clicking buttons
+        if (e.target.closest('.tbtn')) e.preventDefault();
+      });
+      $toolbar.addEventListener('click', (e) => {
+        const btn = e.target.closest('.tbtn');
+        if (!btn) return;
+        $editor.focus();
+        const cmd = btn.dataset.cmd;
+        const arg = btn.dataset.arg;
+        const action = btn.dataset.action;
+        if (action === 'link') {
+          const url = window.prompt('Link URL', 'https://');
+          if (url) document.execCommand('createLink', false, url);
+        } else if (action === 'clear') {
+          document.execCommand('removeFormat');
+          document.execCommand('formatBlock', false, 'p');
+        } else if (cmd) {
+          document.execCommand(cmd, false, arg || null);
+        }
+        syncSendEnabled();
+      });
+
+      const $threadPickerBtn = document.getElementById('threadPickerBtn');
+      const $threadPickerLabel = document.getElementById('threadPickerLabel');
+      const $threadPickerPanel = document.getElementById('threadPickerPanel');
+      const $recipientsBox = document.getElementById('recipientsBox');
+      // Composer thread state: either null (default thread), an existing thread id, or { newName: '...' }
+      let threadChoice = { kind: 'default' }; // 'default' | 'existing'(id, name) | 'new'(name)
+      let recipients = gatherDefaultRecipients(issue, state.messages || []);
+      let showCc = recipients.cc.length > 0;
+      let showBcc = recipients.bcc.length > 0;
+
+      function renderRecipients() {
+        const isInternal = !!$check.checked;
+        // Internal notes never need recipients
+        $recipientsBox.hidden = isInternal;
+        if (isInternal) return;
+
+        const row = (label, key, list, visible, addLabel) => {
+          if (!visible) return '';
+          const chips = list.map((r, idx) => `
+            <span class="rcpt-chip" title="${escapeAttr(r.email)}">
+              <span class="rcpt-name">${escapeHtml(r.name || r.email)}</span>
+              <button type="button" class="rcpt-remove" data-key="${key}" data-idx="${idx}" aria-label="Remove ${escapeAttr(r.email)}">×</button>
+            </span>`).join('');
+          return `
+            <div class="rcpt-row">
+              <span class="rcpt-label">${label}</span>
+              <div class="rcpt-chips">
+                ${chips}
+                <button type="button" class="rcpt-add" data-key="${key}" title="Add recipient">+ Add</button>
+              </div>
+            </div>`;
+        };
+
+        const showLinks = !showCc || !showBcc
+          ? `<div class="rcpt-toggles">
+               ${!showCc ? '<button type="button" class="rcpt-toggle" data-toggle="cc">+ Cc</button>' : ''}
+               ${!showBcc ? '<button type="button" class="rcpt-toggle" data-toggle="bcc">+ Bcc</button>' : ''}
+             </div>` : '';
+
+        $recipientsBox.innerHTML = `
+          ${row('To', 'to', recipients.to, true)}
+          ${row('Cc', 'cc', recipients.cc, showCc)}
+          ${row('Bcc', 'bcc', recipients.bcc, showBcc)}
+          ${showLinks}
+        `;
+
+        // Bind handlers
+        $recipientsBox.querySelectorAll('.rcpt-remove').forEach(btn => {
+          btn.onclick = (e) => {
+            e.preventDefault();
+            const key = btn.dataset.key;
+            const idx = parseInt(btn.dataset.idx, 10);
+            recipients[key].splice(idx, 1);
+            renderRecipients();
+          };
+        });
+        $recipientsBox.querySelectorAll('.rcpt-add').forEach(btn => {
+          btn.onclick = (e) => {
+            e.preventDefault();
+            const key = btn.dataset.key;
+            const v = window.prompt(`Add ${key.toUpperCase()} email address:`, '');
+            if (!v) return;
+            // Accept multiple separated by commas
+            for (const part of v.split(/[,;]/)) {
+              const email = part.trim();
+              if (!email) continue;
+              // Naive validation
+              if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+              if (!recipients[key].find(r => r.email.toLowerCase() === email.toLowerCase())) {
+                recipients[key].push({ email, name: '' });
+              }
+            }
+            renderRecipients();
+          };
+        });
+        $recipientsBox.querySelectorAll('.rcpt-toggle').forEach(btn => {
+          btn.onclick = (e) => {
+            e.preventDefault();
+            const k = btn.dataset.toggle;
+            if (k === 'cc') showCc = true;
+            if (k === 'bcc') showBcc = true;
+            renderRecipients();
+          };
+        });
+      }
+
+      function threadChoiceLabel() {
+        if (threadChoice.kind === 'existing') return threadChoice.name || 'Thread';
+        if (threadChoice.kind === 'new') return `New: ${threadChoice.name}`;
+        return 'Default thread';
+      }
+
+      function syncToggle() {
+        const on = $check.checked;
+        $toggle.dataset.on = on ? 'true' : 'false';
+        $internalLabel.textContent = on ? 'Internal note' : 'Public reply';
+        $sendLabel.textContent = on
+          ? (threadChoice.kind === 'new' ? 'Post in new thread' : 'Post note')
+          : 'Send';
+        $threadPickerBtn.hidden = !on;
+        $threadPickerLabel.textContent = threadChoiceLabel();
+        $threadPickerBtn.dataset.on = (threadChoice.kind !== 'default') ? 'true' : 'false';
+        if (!on) {
+          $threadPickerPanel.hidden = true;
+        }
+      }
+
+      function renderThreadPicker() {
+        const issueId = issue.id || issue.number;
+        const threads = threadsByIssue[issueId] || [];
+        const items = [
+          `<button type="button" class="thread-option" data-thread-kind="default" aria-pressed="${threadChoice.kind === 'default'}">
+             <span class="thread-dot"></span>
+             <span>Default thread</span>
+             <span class="thread-hint">posts to the issue's default internal thread</span>
+           </button>`,
+          ...threads.map(t => `
+             <button type="button" class="thread-option" data-thread-kind="existing" data-thread-id="${escapeAttr(t.id || '')}" data-thread-name="${escapeAttr(t.name || 'Untitled')}" aria-pressed="${threadChoice.kind === 'existing' && threadChoice.id === t.id}">
+               <span class="thread-dot"></span>
+               <span>${escapeHtml(t.name || 'Untitled')}</span>
+             </button>`),
+          `<button type="button" class="thread-option thread-option-new" data-thread-kind="new" aria-pressed="${threadChoice.kind === 'new'}">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+             <span>${threadChoice.kind === 'new' ? `New: ${escapeHtml(threadChoice.name)}` : 'New thread…'}</span>
+           </button>`,
+        ];
+        $threadPickerPanel.innerHTML = items.join('');
+        $threadPickerPanel.querySelectorAll('.thread-option').forEach(btn => {
+          btn.onclick = () => {
+            const kind = btn.dataset.threadKind;
+            if (kind === 'default') {
+              threadChoice = { kind: 'default' };
+            } else if (kind === 'existing') {
+              threadChoice = { kind: 'existing', id: btn.dataset.threadId, name: btn.dataset.threadName };
+            } else if (kind === 'new') {
+              const name = window.prompt('Name this new internal thread:', threadChoice.kind === 'new' ? threadChoice.name : '');
+              if (!name || !name.trim()) return;
+              threadChoice = { kind: 'new', name: name.trim() };
+            }
+            $threadPickerPanel.hidden = true;
+            syncToggle();
+          };
+        });
+      }
+
+      // Load threads in the background so the picker opens fast
+      const issueIdForThreads = issue.id || issue.number;
+      ensureThreadsLoaded(issueIdForThreads).then(() => {
+        if ($threadPickerPanel && !$threadPickerPanel.hidden) renderThreadPicker();
+      });
+      function editorIsEmpty() {
+        const text = ($editor.innerText || '').replace(/​|\s/g, '');
+        return text.length === 0;
+      }
+      function syncSendEnabled() {
+        $send.disabled = editorIsEmpty();
+      }
+      $toggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        $check.checked = !$check.checked;
+        if (!$check.checked) {
+          threadChoice = { kind: 'default' };
+          $threadPickerPanel.hidden = true;
+        }
+        syncToggle();
+        renderRecipients();
+      });
+      $threadPickerBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const willShow = $threadPickerPanel.hidden;
+        if (willShow) renderThreadPicker();
+        $threadPickerPanel.hidden = !willShow;
+      });
+      $editor.addEventListener('input', syncSendEnabled);
+      $editor.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); $send.click(); }
+      });
+      syncToggle(); syncSendEnabled(); renderRecipients();
+
+      // If TO is still empty, async-resolve the customer contact and fill in.
+      if (recipients.to.length === 0) {
+        fillToFromContactIfMissing(state.messages || [], ({ email, name }) => {
+          // Re-collect — recipients may have been populated meanwhile
+          if (recipients.to.length === 0) {
+            recipients.to.push({ email, name });
+            renderRecipients();
+          }
+        });
+      }
+
+      // Pre-fill signature for email/widget public replies (skip chat-source issues)
+      function shouldAddSignature() {
+        const src = String((issue && issue.source) || '').toLowerCase();
+        // Don't include if user is in internal note mode OR if source is a chat channel
+        if ($check.checked) return false;
+        if (src.includes('chat') || src.includes('slack') || src.includes('discord') || src.includes('teams')) return false;
+        return true;
+      }
+      function installSignature() {
+        const sig = (cfg.signature || '').trim();
+        if (!sig) return;
+        if (!shouldAddSignature()) return;
+        // Only install once per composer open and only if editor is empty
+        if (($editor.innerHTML || '').trim()) return;
+        $editor.innerHTML = `<p><br></p><p>--</p>${sig}`;
+        // Move caret to the very top
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.setStart($editor.firstChild || $editor, 0);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      installSignature();
+
+      $send.addEventListener('click', async () => {
+        if (editorIsEmpty()) return;
+        const body_html = $editor.innerHTML.trim();
+        $send.disabled = true;
+        const originalLabel = $sendLabel.textContent;
+        $sendLabel.innerHTML = '<span class="spinner"></span>';
+        try {
+          const id = issue.id || issue.number;
+          const isInternal = !!$check.checked;
+          const result = await postReply(id, {
+            body_html,
+            isInternal,
+            threadId: (isInternal && threadChoice.kind === 'existing') ? threadChoice.id : null,
+            newThreadName: (isInternal && threadChoice.kind === 'new') ? threadChoice.name : '',
+            recipients: isInternal ? null : recipients,
+          });
+          $editor.innerHTML = '';
+          $check.checked = false;
+          threadChoice = { kind: 'default' };
+          $threadPickerPanel.hidden = true;
+          syncToggle(); syncSendEnabled();
+          toast(
+            result.kind === 'note'
+              ? (result.threadId ? 'Note posted to thread' : 'Internal note posted')
+              : 'Reply sent',
+            'success'
+          );
+          await loadIssueDetail(id, { silent: true });
+        } catch (e) {
+          toast(friendlyError(e), 'error');
+        } finally {
+          $sendLabel.textContent = originalLabel;
+          syncSendEnabled();
+        }
+      });
+    }
+
+    function renderMessage(m) {
+      // Resolve author. Pylon /messages returns author_id + author_type.
+      // Some endpoints/payloads return a nested author object. We accept both.
+      let author = '';
+      if (m.author && typeof m.author === 'object') {
+        author = m.author.name || m.author.email || '';
+      }
+      if (!author && (m.from && typeof m.from === 'object')) {
+        author = m.from.name || m.from.email || '';
+      }
+      if (!author && m.author_id) {
+        const person = resolvePerson(m.author_id, m.author_type);
+        if (person) author = person.name || person.email || '';
+      }
+      if (!author) author = m.author_name || m.from_name || (m.author_type === 'system' ? 'System' : '—');
+
+      const when = m.sent_at || m.created_at || m.timestamp || m.updated_at;
+      // Pylon uses is_private for internal notes; some payloads use is_internal/internal
+      const isInternal = !!(m.is_private ?? m.is_internal ?? m.internal);
+      const fromCustomer = m.from_customer === true;
+
+      // Hunt for body content across every reasonable field name
+      let html = '';
+      const htmlSrc = m.body_html ?? m.html_body ?? m.content_html ?? m.html ?? m.message_html ?? '';
+      const textSrc = m.body_text ?? m.text_body ?? m.content_text ?? m.text ?? m.body ?? m.content ?? '';
+      if (htmlSrc) {
+        html = sanitizeHtml(htmlSrc);
+      } else if (textSrc) {
+        html = escapeHtml(String(textSrc)).replace(/\n/g, '<br>');
+      } else {
+        html = '<span class="faint">(no body in API response — open in Pylon to view)</span>';
+      }
+
+      const sourceBadge = m.source && m.source !== 'email'
+        ? `<span class="badge tiny">${escapeHtml(m.source)}</span>` : '';
+
+      const isSystem = (m.author_type === 'system') || author === 'System';
+      const avatar = renderAvatar(author === '—' ? '?' : author, {
+        seed: m.author_id || author,
+        size: 'sm',
+        system: isSystem,
+      });
+
+      return `
+        <li class="msg ${isInternal ? 'msg-internal' : ''}">
+          ${avatar}
+          <div class="msg-content">
+            <div class="msg-header">
+              <span class="msg-author">${escapeHtml(author)}</span>
+              ${fromCustomer ? '<span class="badge badge-snoozed">Customer</span>' : ''}
+              ${isInternal ? '<span class="badge badge-pending">Internal</span>' : ''}
+              ${sourceBadge}
+              <span class="msg-time" style="margin-left:auto;">${when ? escapeHtml(formatDateTime(when)) : ''}</span>
+            </div>
+            <div class="msg-body">${html}</div>
+          </div>
+        </li>
+      `;
+    }
+
+    function renderSettings() {
+      const masked = cfg.apiKey ? cfg.apiKey.slice(0, 6) + '••••••' + cfg.apiKey.slice(-4) : '';
+      const meName = state.me ? (state.me.name || state.me.email || 'Signed in') : 'Signed in';
+      const meEmail = state.me ? (state.me.email || '') : '';
+      main.innerHTML = `
+        <div class="stack-16">
+          <div class="card">
+            <div class="row" style="align-items:flex-start;">
+              <div class="logo" style="margin: 0;">${escapeHtml((meName || 'P').slice(0,1).toUpperCase())}</div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-weight:600; font-size:15px;">${escapeHtml(meName)}</div>
+                <div class="small muted truncate">${escapeHtml(meEmail)}</div>
+                <div class="tiny faint truncate" style="margin-top:4px;">Key: ${escapeHtml(masked)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="list-card">
+            <button class="list-row" id="editKey">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
+              <span class="body"><span class="l1">Change API key</span><span class="l2">${escapeHtml(masked || '—')}</span></span>
+              <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+            <button class="list-row" id="editBase">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+              <span class="body"><span class="l1">API base URL</span><span class="l2">${escapeHtml(cfg.base)}</span></span>
+              <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+            <button class="list-row" id="editProxy">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg></span>
+              <span class="body"><span class="l1">CORS proxy</span><span class="l2">${escapeHtml(cfg.proxy || 'Direct (no proxy)')}</span></span>
+              <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+            <button class="list-row" id="editSignature">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17.5V21h3.5L19 8.5 15.5 5 3 17.5z"/><path d="M14 6l3 3"/></svg></span>
+              <span class="body"><span class="l1">Email signature</span><span class="l2">${escapeHtml(cfg.signature ? signaturePreview(cfg.signature) : 'Not set — add yours')}</span></span>
+              <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+          </div>
+
+          <div class="list-card">
+            <button class="list-row" id="viewNetLog">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></span>
+              <span class="body"><span class="l1">Network log</span><span class="l2">${netLog.length} recent API call${netLog.length === 1 ? '' : 's'}</span></span>
+              <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+          </div>
+
+          <div class="list-card">
+            <button class="list-row" id="signOut" style="color: var(--danger);">
+              <span class="left" style="color: var(--danger);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
+              <span class="body"><span class="l1">Sign out</span><span class="l2">Forget API key on this device</span></span>
+            </button>
+          </div>
+
+          <p class="tiny faint center">Pylon Mobile — single-file static app. Your API key never leaves this device except in requests to Pylon (or to your CORS proxy if configured).</p>
+        </div>
+      `;
+
+      document.getElementById('editKey').addEventListener('click', () => promptAndSave('Pylon API key', '', (v) => { cfg.apiKey = v; saveConfig(); toast('API key updated', 'success'); render(); }));
+      document.getElementById('editBase').addEventListener('click', () => promptAndSave('API base URL', cfg.base, (v) => { cfg.base = v || DEFAULT_BASE; saveConfig(); toast('Base URL updated', 'success'); render(); }));
+      document.getElementById('editProxy').addEventListener('click', () => promptAndSave('CORS proxy URL (leave blank for direct)', cfg.proxy || '', (v) => { cfg.proxy = v.trim(); saveConfig(); toast(cfg.proxy ? 'Proxy enabled' : 'Proxy cleared', 'success'); render(); }));
+      document.getElementById('editSignature').addEventListener('click', () => { state.view = 'signature'; render(); });
+      document.getElementById('viewNetLog').addEventListener('click', () => { state.view = 'netlog'; render(); });
+      document.getElementById('signOut').addEventListener('click', () => {
+        if (!confirm('Sign out and forget your API key on this device?')) return;
+        clearConfig();
+        state.issues = []; state.messages = []; state.issue = null; state.me = null;
+        navigate('list');
+      });
+    }
+
+    function signaturePreview(sig) {
+      // Strip tags + collapse whitespace, show first ~50 chars
+      const tmp = document.createElement('div');
+      tmp.innerHTML = String(sig || '');
+      const t = (tmp.textContent || '').replace(/\s+/g, ' ').trim();
+      return t.length > 50 ? t.slice(0, 50) + '…' : (t || 'Not set');
+    }
+
+    function renderSignature() {
+      main.innerHTML = `
+        <div class="stack-16">
+          <div class="card stack-16">
+            <div>
+              <div class="label">Your email signature</div>
+              <div class="help" style="margin-bottom:10px;">
+                This appears automatically at the bottom of every public reply you send on email and widget issues. It is <strong>not</strong> added to internal notes or chat-source tickets.
+              </div>
+              <div class="editor-toolbar" id="sigToolbar" role="toolbar" aria-label="Formatting">
+                <button type="button" class="tbtn" data-cmd="bold" title="Bold"><b>B</b></button>
+                <button type="button" class="tbtn" data-cmd="italic" title="Italic"><i>I</i></button>
+                <button type="button" class="tbtn" data-cmd="underline" title="Underline"><span style="text-decoration:underline;">U</span></button>
+                <span class="tbtn-divider"></span>
+                <button type="button" class="tbtn" data-action="link" title="Insert link">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                </button>
+                <button type="button" class="tbtn" data-action="clear" title="Clear formatting">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><line x1="5" y1="20" x2="19" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
+                </button>
+              </div>
+              <div id="sigEditor" class="editor" contenteditable="true" data-placeholder="Type your signature here — e.g. Thanks, Udip · Customer Support · 0485 864 211"></div>
+            </div>
+            <div class="btn-row">
+              <button class="btn" id="sigCancel">Cancel</button>
+              <button class="btn btn-primary" id="sigSave">Save signature</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="label">Tip</div>
+            <p class="small muted" style="margin: 4px 0 0;">
+              You can use bold, italic, underline, and links. Paste from another doc (e.g. Outlook) to bring formatted text over.
+            </p>
+          </div>
+        </div>
+      `;
+      const $editor = document.getElementById('sigEditor');
+      $editor.innerHTML = cfg.signature || '';
+      const $toolbar = document.getElementById('sigToolbar');
+      $toolbar.addEventListener('mousedown', e => { if (e.target.closest('.tbtn')) e.preventDefault(); });
+      $toolbar.addEventListener('click', e => {
+        const b = e.target.closest('.tbtn');
+        if (!b) return;
+        $editor.focus();
+        if (b.dataset.action === 'link') {
+          const url = window.prompt('Link URL', 'https://');
+          if (url) document.execCommand('createLink', false, url);
+        } else if (b.dataset.action === 'clear') {
+          document.execCommand('removeFormat');
+        } else if (b.dataset.cmd) {
+          document.execCommand(b.dataset.cmd, false, null);
+        }
+      });
+      document.getElementById('sigSave').addEventListener('click', () => {
+        cfg.signature = $editor.innerHTML.trim();
+        saveConfig();
+        toast('Signature saved', 'success');
+        state.view = 'settings'; render();
+      });
+      document.getElementById('sigCancel').addEventListener('click', () => {
+        state.view = 'settings'; render();
+      });
+    }
+
+    function renderNetLog() {
+      const rows = netLog.map((e, i) => {
+        const statusColor = e.ok ? 'var(--success)' : 'var(--danger)';
+        const time = new Date(e.at).toLocaleTimeString();
+        return `
+          <div class="card" style="padding:12px;">
+            <div class="row" style="gap:8px; flex-wrap:wrap;">
+              <span class="badge" style="color:${statusColor}; border-color:transparent; background: color-mix(in srgb, ${statusColor} 14%, transparent);">${e.status}</span>
+              <span class="small" style="font-weight:600;">${escapeHtml(e.method)} ${escapeHtml(e.path)}</span>
+              <span class="tiny faint" style="margin-left:auto;">${e.ms}ms · ${time}</span>
+            </div>
+            ${e.excerpt ? `<pre style="margin:8px 0 0; padding:8px; background:var(--surface-2); border-radius:8px; font-size:11px; line-height:1.4; white-space:pre-wrap; word-break:break-all; max-height:180px; overflow:auto;">${escapeHtml(e.excerpt)}</pre>` : ''}
+          </div>
+        `;
+      }).join('');
+      main.innerHTML = `
+        <div class="stack-12">
+          ${netLog.length === 0 ? `<div class="state"><div class="small">No API calls logged yet.</div></div>` : rows}
+        </div>
+      `;
+    }
+
+    function promptAndSave(label, current, onSave) {
+      // Simple prompt — keeps the file small. For sensitive fields prefer a modal in a future version.
+      const v = window.prompt(label, current);
+      if (v === null) return;
+      onSave(v.trim());
+    }
+
+    // ============ Data loading ============
+
+    async function loadIssues() {
+      state.loading = true;
+      state.error = null;
+      patchView();
+      // Warm people + account caches so we can show names/avatars
+      ensurePeopleLoaded();
+      // Re-render the list when accounts arrive so account names appear inline
+      ensureAccountsLoaded().then(() => { if (state.view === 'list') patchView(); });
+      try {
+        // Pylon /issues requires a start_time/end_time window (RFC3339).
+        // Default to the last 30 days. Pull a larger limit so counts are meaningful.
+        const end = new Date();
+        const start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const q = {
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          limit: 100,
+        };
+        const resp = await Pylon.listIssues(q);
+        state.allIssues = extractList(resp);
+        // Compute all derived state via the same pipeline filter+counts use
+        reapplyFilters();
+        return; // reapplyFilters already calls patchView
+      } catch (e) {
+        state.allIssues = [];
+        state.issues = [];
+        state.stateCounts = {};
+        state.assigneeStats = [];
+        state.error = friendlyError(e);
+      } finally {
+        state.loading = false;
+        patchView();
+      }
+    }
+
+    // Filter pipeline. `skip` is a Set of dimensions to bypass:
+    //   'state', 'assignee', 'q'. Used so the status chips can compute "if I
+    //   picked this state" counts while still respecting the assignee filter.
+    function applyClientFilters(issues, skip = new Set()) {
+      const meId = state.me && (state.me.id || state.me.user_id);
+      return issues.filter(i => {
+        if (!skip.has('state') && state.filter.state) {
+          const s = (i.state || i.status || '').toLowerCase();
+          if (s !== state.filter.state) return false;
+        }
+        if (!skip.has('assignee') && state.filter.assignee && state.filter.assignee !== 'all') {
+          const aId = i.assignee_id || (i.assignee && i.assignee.id) || '';
+          if (state.filter.assignee === 'me') {
+            if (!meId || aId !== meId) return false;
+          } else if (state.filter.assignee === 'unassigned') {
+            if (aId) return false;
+          } else {
+            if (aId !== state.filter.assignee) return false;
+          }
+        }
+        if (!skip.has('q') && state.filter.q) {
+          const needle = state.filter.q.toLowerCase();
+          const hay = [
+            i.title, i.subject,
+            i.requester && (i.requester.name || i.requester.email),
+            i.account && i.account.name,
+            assigneeNameOf(i),
+            i.number, i.id,
+          ].filter(Boolean).join(' ').toLowerCase();
+          if (!hay.includes(needle)) return false;
+        }
+        return true;
+      });
+    }
+
+    function reapplyFilters() {
+      // Final displayed list — every filter applied
+      state.issues = applyClientFilters(state.allIssues);
+      // State chip counts — apply every filter EXCEPT state
+      state.stateCounts = countByState(applyClientFilters(state.allIssues, new Set(['state'])));
+      // Assignee chip stats — apply every filter EXCEPT assignee
+      state.assigneeStats = topAssignees(applyClientFilters(state.allIssues, new Set(['assignee'])));
+      patchView();
+    }
+
+    function countByState(issues) {
+      const c = { _total: issues.length };
+      for (const i of issues) {
+        const s = (i.state || i.status || '').toLowerCase();
+        if (!s) continue;
+        c[s] = (c[s] || 0) + 1;
+      }
+      return c;
+    }
+
+    function assigneeNameOf(issue) {
+      const aId = issue.assignee_id || (issue.assignee && issue.assignee.id);
+      if (!aId) return '';
+      if (issue.assignee && (issue.assignee.name || issue.assignee.email)) {
+        return issue.assignee.name || issue.assignee.email;
+      }
+      const p = resolvePerson(aId, 'user');
+      return p ? (p.name || p.email || '') : '';
+    }
+
+    function topAssignees(issues) {
+      const map = new Map();
+      for (const i of issues) {
+        const aId = i.assignee_id || (i.assignee && i.assignee.id);
+        if (!aId) continue;
+        const cur = map.get(aId) || { id: aId, count: 0, name: '' };
+        cur.count += 1;
+        if (!cur.name) cur.name = assigneeNameOf(i);
+        map.set(aId, cur);
+      }
+      // Resolve names again now that peopleCache may have arrived
+      for (const v of map.values()) {
+        if (!v.name) {
+          const p = resolvePerson(v.id, 'user');
+          if (p) v.name = p.name || p.email || '';
+        }
+      }
+      return Array.from(map.values()).sort((a, b) => b.count - a.count).slice(0, 6);
+    }
+
+    async function loadIssueDetail(id, { silent } = {}) {
+      if (!silent) { state.loading = true; state.error = null; state.messages = []; render(); }
+      // Fire people-loading in the background — it's only used to label authors.
+      ensurePeopleLoaded();
+      try {
+        // Issue details
+        const issueResp = await Pylon.getIssue(id).catch(e => { console.warn('getIssue failed', e); return null; });
+        if (issueResp) {
+          const issue = issueResp.data || issueResp.issue || issueResp;
+          state.issue = Object.assign({}, state.issue, issue);
+        }
+
+        // Messages — try /issues/{id}/messages first (matches MCP shape), then /messages
+        let msgResp = await Pylon.listMessages(id).catch(() => null);
+        if (!msgResp || (extractList(msgResp).length === 0 && !Array.isArray(msgResp.messages))) {
+          msgResp = await Pylon.listMessagesAlt(id).catch(() => null);
+        }
+        if (msgResp) state.messages = extractList(msgResp);
+      } catch (e) {
+        state.error = friendlyError(e);
+      } finally {
+        state.loading = false;
+        if (state.view === 'detail') renderDetail();
+      }
+    }
+
+    // Try a list of (endpoint, payload) candidates until one succeeds.
+    // Pylon's actual reply endpoint isn't in the docs I can read from here;
+    // this brute-forces the most common patterns so the app works while we
+    // pin down the real path from the network log on first success.
+    // Reply / note / thread per Pylon docs:
+    //   POST /issues/{id}/reply  →  customer-facing reply  (body_html, message_id)
+    //   POST /issues/{id}/note   →  internal note           (body_html, thread_id?)
+    //   POST /issues/{id}/threads → new internal thread     (name)
+    async function postReply(id, { body_html, isInternal, threadId, newThreadName, recipients }) {
+      if (isInternal) {
+        let targetThreadId = threadId || null;
+        if (newThreadName) {
+          const t = await Pylon.createThread(id, { name: newThreadName });
+          const created = (t && (t.data || t)) || {};
+          // Per docs: use the `id` field (not thread_id) from the response
+          targetThreadId = created.id || created.thread_id || null;
+          // Refresh thread list cache for this issue
+          delete threadsByIssue[id];
+        }
+        const body = { body_html };
+        if (targetThreadId) body.thread_id = targetThreadId;
+        await Pylon.postNote(id, body);
+        return { kind: 'note', threadId: targetThreadId };
+      } else {
+        // Public reply
+        const msgs = state.messages || [];
+        let messageId = null;
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const m = msgs[i];
+          const isPrivate = !!(m && (m.is_private ?? m.is_internal ?? m.internal));
+          if (!isPrivate && m && m.id) { messageId = m.id; break; }
+        }
+        const body = { body_html };
+        if (messageId) body.message_id = messageId;
+        // email_info: { to_emails, cc_emails, bcc_emails } — required when issue.source is email
+        if (recipients && (recipients.to.length || recipients.cc.length || recipients.bcc.length)) {
+          body.email_info = {
+            to_emails: recipients.to.map(r => r.email).filter(Boolean),
+            cc_emails: recipients.cc.map(r => r.email).filter(Boolean),
+            bcc_emails: recipients.bcc.map(r => r.email).filter(Boolean),
+          };
+        }
+        await Pylon.replyPublic(id, body);
+        return { kind: 'reply' };
+      }
+    }
+
+    // Build the default recipient lists for a reply.
+    //
+    // The TO field should be the original customer/sender. We try, in order:
+    //   1. issue.requester.email           (most reliable when set)
+    //   2. From the latest customer message: lookup author_id in peopleCache
+    //   3. The latest non-internal message's email_info.from_email field
+    //
+    // CC/BCC come from the latest non-internal message's email_info, minus
+    // anyone already in TO and minus the signed-in user.
+    function gatherDefaultRecipients(issue, messages) {
+      const me = state.me || {};
+      const myEmails = new Set([me.email].filter(Boolean).map(s => s.toLowerCase()));
+      const seen = new Set();
+      const out = { to: [], cc: [], bcc: [] };
+
+      function pushUnique(target, email, name) {
+        if (!email) return;
+        const lower = String(email).toLowerCase();
+        if (myEmails.has(lower)) return; // never auto-add self
+        if (seen.has(lower)) return;
+        target.push({ email, name: name || '' });
+        seen.add(lower);
+      }
+
+      // 1. requester.email from the issue (most reliable when populated)
+      if (issue && issue.requester && issue.requester.email) {
+        pushUnique(out.to, issue.requester.email, issue.requester.name);
+      }
+
+      // 2. If TO is still empty, try resolving via the latest customer message's author
+      if (out.to.length === 0) {
+        const msgs = messages || [];
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const m = msgs[i];
+          if (!m || !m.from_customer) continue;
+          // First try peopleCache.contacts (populated by listContacts)
+          if (m.author_id && peopleCache.contacts[m.author_id]) {
+            const c = peopleCache.contacts[m.author_id];
+            pushUnique(out.to, c.email, c.name);
+            if (out.to.length > 0) break;
+          }
+          // Fallback to nested author/from objects on the message itself
+          const nested = m.author || m.from || m.sender;
+          if (nested && typeof nested === 'object' && nested.email) {
+            pushUnique(out.to, nested.email, nested.name);
+            if (out.to.length > 0) break;
+          }
+        }
+      }
+
+      // 3. Walk newest-first, find the latest non-internal message's email_info
+      const msgs = messages || [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        const isPrivate = !!(m && (m.is_private ?? m.is_internal));
+        if (isPrivate) continue;
+        const info = m && (m.email_info || m.email || m.email_metadata);
+        if (!info) continue;
+
+        // If TO is still empty, the from_email of the latest customer email is the best guess
+        if (out.to.length === 0) {
+          const fromEmail = info.from_email || info.from || (info.from_address && info.from_address.email);
+          const fromName = (info.from_address && info.from_address.name) || '';
+          if (fromEmail) pushUnique(out.to, fromEmail, fromName);
+        }
+
+        const addList = (key, target) => {
+          const arr = info[key + '_emails'] || info[key] || [];
+          for (const raw of (Array.isArray(arr) ? arr : [])) {
+            const email = typeof raw === 'string' ? raw : (raw && (raw.email || raw.address));
+            const name = typeof raw === 'object' ? (raw.name || '') : '';
+            pushUnique(target, email, name);
+          }
+        };
+        // Pull cc/bcc; some Pylon payloads also have to_emails — if our TO is
+        // still empty, use those as a last resort.
+        addList('cc', out.cc);
+        addList('bcc', out.bcc);
+        if (out.to.length === 0) addList('to', out.to);
+
+        break;
+      }
+
+      return out;
+    }
+
+    // Async helper: if a customer message's contact isn't in the cache, fetch it
+    // and re-fill the composer recipients in place.
+    async function fillToFromContactIfMissing(messages, onResolved) {
+      const msgs = messages || [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (!m || !m.from_customer || !m.author_id) continue;
+        if (peopleCache.contacts[m.author_id]) continue; // already had it
+        try {
+          const r = await Pylon.getContact(m.author_id);
+          const c = (r && (r.data || r)) || null;
+          if (c && c.id) {
+            peopleCache.contacts[c.id] = c;
+            if (c.email) onResolved({ email: c.email, name: c.name || '' });
+          }
+        } catch {}
+        break;
+      }
+    }
+
+    function recipientLabel(r) { return r.name ? `${r.name} <${r.email}>` : r.email; }
+
+    // Thread list per issue (cached for the session)
+    const threadsByIssue = {};
+    async function ensureThreadsLoaded(issueId) {
+      if (threadsByIssue[issueId]) return threadsByIssue[issueId];
+      try {
+        const r = await Pylon.listThreads(issueId);
+        const list = extractList(r) || [];
+        threadsByIssue[issueId] = list;
+      } catch {
+        threadsByIssue[issueId] = [];
+      }
+      return threadsByIssue[issueId];
+    }
+
+    async function changeIssueState(newState) {
+      const issue = state.issue || {};
+      const id = issue.id || issue.number;
+      if (!id) return;
+      try {
+        const resp = await Pylon.updateIssue(id, { state: newState });
+        const updated = (resp && (resp.data || resp.issue || resp)) || {};
+        state.issue = Object.assign({}, state.issue, updated, { state: newState });
+        toast(`State changed to ${prettyState(newState)}`, 'success');
+        if (state.view === 'detail') renderDetail();
+      } catch (e) {
+        toast(friendlyError(e), 'error');
+      }
+    }
+
+    // Whether the tag picker dropdown is open
+    let tagPickerOpen = false;
+    let tagPickerSearch = '';
+
+    function currentTagNames() {
+      const t = (state.issue && state.issue.tags) || [];
+      return t.map(x => typeof x === 'string' ? x : tagNameOf(x)).filter(Boolean);
+    }
+
+    function renderTagsSection() {
+      const current = currentTagNames();
+      const currentSet = new Set(current.map(n => n.toLowerCase()));
+      const allTags = (tagCache.tags || []).map(tagNameOf).filter(Boolean);
+      // Available = not yet on this issue
+      const needle = tagPickerSearch.toLowerCase();
+      const filtered = allTags
+        .filter(n => !currentSet.has(n.toLowerCase()))
+        .filter(n => !needle || n.toLowerCase().includes(needle))
+        .slice(0, 50);
+
+      const pills = current.map(name => `
+        <span class="tag-pill" style="background:${tagColor(name)}; color:${tagTextColor(name)};">
+          ${escapeHtml(name)}
+          <button class="tag-remove" data-tag="${escapeAttr(name)}" aria-label="Remove ${escapeAttr(name)}">×</button>
+        </span>`).join('');
+
+      const picker = !tagPickerOpen ? '' : `
+        <div class="tag-picker">
+          <input type="search" id="tagSearch" placeholder="Search tags…" value="${escapeAttr(tagPickerSearch)}" autocomplete="off" />
+          <div class="tag-options" id="tagOptions">
+            ${!tagCache.loaded
+              ? '<div class="state-row faint" style="padding:14px;"><span class="spinner"></span> Loading tags…</div>'
+              : (filtered.length === 0
+                  ? `<div class="state-row faint" style="padding:14px;">${tagPickerSearch ? 'No matches.' : (allTags.length === 0 ? 'No tags available for this workspace.' : 'All tags already added.')}</div>`
+                  : filtered.map(name => `
+                    <button class="tag-option" data-tag="${escapeAttr(name)}">
+                      <span class="tag-swatch" style="background:${tagColor(name)};"></span>
+                      ${escapeHtml(name)}
+                    </button>`).join(''))
+            }
+          </div>
+        </div>`;
+
+      return `
+        <div class="tag-row">
+          ${pills}
+          <button class="tag-add" id="tagAddBtn">${tagPickerOpen ? '× Close' : '+ Add tag'}</button>
+        </div>
+        ${picker}
+      `;
+    }
+
+    function patchTagsSection() {
+      const node = document.getElementById('tagsSection');
+      if (!node) return;
+      node.innerHTML = renderTagsSection();
+      bindTagsSection();
+      if (tagPickerOpen) {
+        const $s = document.getElementById('tagSearch');
+        if ($s) $s.focus();
+      }
+    }
+
+    function bindTagsSection() {
+      const $add = document.getElementById('tagAddBtn');
+      if ($add) {
+        $add.onclick = async () => {
+          tagPickerOpen = !tagPickerOpen;
+          tagPickerSearch = '';
+          patchTagsSection();
+          if (tagPickerOpen && !tagCache.loaded) {
+            await ensureTagsLoaded();
+            if (tagPickerOpen) patchTagsSection();
+          }
+        };
+      }
+      const $section = document.getElementById('tagsSection');
+      if (!$section) return;
+      $section.querySelectorAll('.tag-remove').forEach(btn => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          removeTag(btn.dataset.tag);
+        };
+      });
+      $section.querySelectorAll('.tag-option').forEach(btn => {
+        btn.onclick = () => addTag(btn.dataset.tag);
+      });
+      const $search = document.getElementById('tagSearch');
+      if ($search) {
+        $search.oninput = (e) => {
+          tagPickerSearch = e.target.value;
+          const $opts = document.getElementById('tagOptions');
+          if ($opts) {
+            const allTags = (tagCache.tags || []).map(tagNameOf).filter(Boolean);
+            const currentSet = new Set(currentTagNames().map(n => n.toLowerCase()));
+            const needle = tagPickerSearch.toLowerCase();
+            const filtered = allTags
+              .filter(n => !currentSet.has(n.toLowerCase()))
+              .filter(n => !needle || n.toLowerCase().includes(needle))
+              .slice(0, 50);
+            $opts.innerHTML = filtered.length === 0
+              ? `<div class="state-row faint" style="padding:14px;">${needle ? 'No matches.' : 'All tags already added.'}</div>`
+              : filtered.map(name => `
+                <button class="tag-option" data-tag="${escapeAttr(name)}">
+                  <span class="tag-swatch" style="background:${tagColor(name)};"></span>
+                  ${escapeHtml(name)}
+                </button>`).join('');
+            $opts.querySelectorAll('.tag-option').forEach(b => {
+              b.onclick = () => addTag(b.dataset.tag);
+            });
+          }
+        };
+      }
+    }
+
+    async function setIssueTags(nextTags, optimisticPrev) {
+      const issue = state.issue || {};
+      const id = issue.id || issue.number;
+      if (!id) return;
+      try {
+        const resp = await Pylon.updateIssue(id, { tags: nextTags });
+        const updated = (resp && (resp.data || resp.issue || resp)) || {};
+        state.issue = Object.assign({}, state.issue, updated, { tags: nextTags });
+        // Also reflect in the list-cache so the list view doesn't drift
+        const idx = state.allIssues.findIndex(i => (i.id || i.number) === (issue.id || issue.number));
+        if (idx >= 0) state.allIssues[idx] = Object.assign({}, state.allIssues[idx], { tags: nextTags });
+      } catch (e) {
+        // Revert
+        state.issue = Object.assign({}, state.issue, { tags: optimisticPrev });
+        toast(friendlyError(e), 'error');
+      } finally {
+        patchTagsSection();
+      }
+    }
+
+    async function addTag(name) {
+      const prev = currentTagNames();
+      if (prev.map(n => n.toLowerCase()).includes(name.toLowerCase())) return;
+      const next = [...prev, name];
+      // Optimistic
+      state.issue = Object.assign({}, state.issue, { tags: next });
+      patchTagsSection();
+      await setIssueTags(next, prev);
+      toast(`Added "${name}"`, 'success');
+    }
+    async function removeTag(name) {
+      const prev = currentTagNames();
+      const next = prev.filter(n => n.toLowerCase() !== name.toLowerCase());
+      state.issue = Object.assign({}, state.issue, { tags: next });
+      patchTagsSection();
+      await setIssueTags(next, prev);
+      toast(`Removed "${name}"`, 'success');
+    }
+
+    // Deterministic pastel-ish tag colors based on the tag name.
+    const TAG_PALETTE = [
+      ['#ece8ff','#5b46b8'], ['#ffe5e7','#b42318'], ['#d6f1e1','#176e3a'],
+      ['#d8e6ff','#1f4faf'], ['#fff1d6','#9a5b00'], ['#ffe1f0','#a3185f'],
+      ['#dff7f5','#066b5e'], ['#f5e1ff','#6b1a8c'], ['#fff0e0','#8a3a00'],
+      ['#e7fde7','#236f23'],
+    ];
+    function tagColorIdx(name) {
+      let h = 0;
+      const s = String(name || '');
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+      return h % TAG_PALETTE.length;
+    }
+    function tagColor(name) { return TAG_PALETTE[tagColorIdx(name)][0]; }
+    function tagTextColor(name) { return TAG_PALETTE[tagColorIdx(name)][1]; }
+
+    function extractList(resp) {
+      if (!resp) return [];
+      if (Array.isArray(resp)) return resp;
+      if (Array.isArray(resp.data)) return resp.data;
+      if (Array.isArray(resp.items)) return resp.items;
+      if (Array.isArray(resp.results)) return resp.results;
+      if (Array.isArray(resp.issues)) return resp.issues;
+      if (Array.isArray(resp.messages)) return resp.messages;
+      return [];
+    }
+
+    function patchView() {
+      if (state.view !== 'list') return;
+      const container = document.getElementById('listContainer');
+      const fb = document.getElementById('filterBar');
+      const ab = document.getElementById('assigneeBar');
+      if (!container || !fb || !ab) { render(); return; }
+      fb.innerHTML = renderStateChips();
+      ab.innerHTML = renderAssigneeChips();
+      container.innerHTML = renderListBody();
+      const retry = document.getElementById('retryBtn');
+      if (retry) retry.addEventListener('click', loadIssues);
+      attachBodyObservers();
+    }
+
+    // ============ Header actions ============
+
+    hdrLeft.addEventListener('click', () => {
+      if (state.view === 'detail') navigate('list');
+      else if (state.view === 'settings') navigate('list');
+      else if (state.view === 'netlog') { state.view = 'settings'; render(); }
+      else if (state.view === 'signature') { state.view = 'settings'; render(); }
+    });
+    hdrRight.addEventListener('click', () => {
+      if (state.view === 'list') navigate('settings');
+    });
+
+    // Bottom nav handlers
+    bottomNav.addEventListener('click', (e) => {
+      const btn = e.target.closest('.bottom-nav-btn');
+      if (!btn) return;
+      const target = btn.dataset.nav;
+      if (target === 'list') navigate('list');
+      else if (target === 'search') {
+        navigate('list');
+        // Focus the search box after render
+        setTimeout(() => { const s = document.getElementById('searchInput'); if (s) s.focus(); }, 40);
+      } else if (target === 'settings') navigate('settings');
+    });
+
+    // ============ Toast ============
+
+    const toastEl = document.getElementById('toast');
+    let toastTimer = null;
+    function toast(msg, kind) {
+      toastEl.textContent = msg;
+      toastEl.className = 'toast show' + (kind ? ' ' + kind : '');
+      clearTimeout(toastTimer);
+      if (kind === 'error') {
+        // Errors stick until tapped, so the user can read & copy the full message
+        toastEl.onclick = () => {
+          toastEl.className = 'toast' + (kind ? ' ' + kind : '');
+          toastEl.onclick = null;
+        };
+      } else {
+        toastEl.onclick = null;
+        toastTimer = setTimeout(() => { toastEl.className = 'toast' + (kind ? ' ' + kind : ''); }, 2400);
+      }
+    }
+
+    // ============ Helpers ============
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    // very small HTML sanitizer for message bodies — strips scripts/styles/event handlers.
+    function sanitizeHtml(html) {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = String(html || '');
+      const walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_ELEMENT);
+      const remove = [];
+      let n;
+      while ((n = walker.nextNode())) {
+        const tag = n.tagName.toLowerCase();
+        if (['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta'].includes(tag)) {
+          remove.push(n);
+          continue;
+        }
+        // strip on* handlers and javascript: urls
+        for (const attr of Array.from(n.attributes)) {
+          const name = attr.name.toLowerCase();
+          const val = (attr.value || '').trim();
+          if (name.startsWith('on')) n.removeAttribute(attr.name);
+          else if ((name === 'href' || name === 'src') && /^javascript:/i.test(val)) n.removeAttribute(attr.name);
+        }
+        if (tag === 'a' && n.hasAttribute('href')) {
+          n.setAttribute('target', '_blank');
+          n.setAttribute('rel', 'noopener noreferrer');
+        }
+        if (tag === 'img') {
+          n.setAttribute('loading', 'lazy');
+        }
+      }
+      remove.forEach(el => el.remove());
+      return tpl.innerHTML;
+    }
+
+    function formatDate(d) {
+      try {
+        return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      } catch { return String(d); }
+    }
+    function formatDateTime(d) {
+      try {
+        const date = new Date(d);
+        const today = new Date();
+        const sameDay = date.toDateString() === today.toDateString();
+        if (sameDay) return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      } catch { return String(d); }
+    }
+    function timeAgo(d) {
+      try {
+        const ms = Date.now() - new Date(d).getTime();
+        const s = Math.floor(ms / 1000);
+        if (s < 60) return 'just now';
+        const m = Math.floor(s / 60);
+        if (m < 60) return m + 'm';
+        const h = Math.floor(m / 60);
+        if (h < 24) return h + 'h';
+        const day = Math.floor(h / 24);
+        if (day < 7) return day + 'd';
+        return formatDate(d);
+      } catch { return ''; }
+    }
+
+    function friendlyError(e) {
+      const msg = (e && e.message) || String(e);
+      if (/Failed to fetch|NetworkError|TypeError/.test(msg)) {
+        return 'Network/CORS error. Direct browser calls to api.usepylon.com are usually blocked by CORS — configure a CORS proxy in Settings (see README).';
+      }
+      // Preserve the full Pylon error message verbatim — the API often returns
+      // useful detail (missing field, bad enum, etc).
+      return msg;
+    }
+
+    // ============ Boot ============
+    if (!cfg.apiKey) {
+      render();
+    } else {
+      // try /me silently so settings has user info; then load list
+      Pylon.me().then(me => { state.me = (me && (me.data || me)) || null; render(); }).catch(() => render());
+      loadIssues();
+    }
+
+  })();
+  </script>
+</body>
+</html>
