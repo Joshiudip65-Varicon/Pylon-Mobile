@@ -3,13 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#0b0b0c" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#6e56cf" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0e0a1c" media="(prefers-color-scheme: dark)" />
+  <meta name="description" content="Pylon support inbox for your phone — view, reply, manage tickets." />
+  <!-- PWA / iOS metadata -->
+  <link rel="manifest" href="manifest.json" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Pylon" />
+  <meta name="application-name" content="Pylon Mobile" />
+  <meta name="format-detection" content="telephone=no" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png" />
+  <link rel="apple-touch-icon" sizes="167x167" href="icons/icon-167.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png" />
   <title>Pylon Mobile</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231a1a1f'/%3E%3Cpath d='M20 44V20h12c5 0 8 3 8 7s-3 7-8 7h-6v10h-6zm6-15h5c2 0 3-1 3-2.5S33 24 31 24h-5v5z' fill='white'/%3E%3C/svg%3E" />
   <style>
     /* -------- design tokens (Pylon-inspired) -------- */
     :root {
@@ -96,7 +106,15 @@
       -webkit-font-smoothing: antialiased;
       -webkit-tap-highlight-color: transparent;
       overscroll-behavior-y: contain;
+      /* Smoother momentum scroll on iOS WebKit */
+      -webkit-overflow-scrolling: touch;
+      /* Stop iOS Safari from auto-zooming text inputs on focus */
+      text-size-adjust: 100%;
+      -webkit-text-size-adjust: 100%;
     }
+    /* Prevent iOS rubberband when in standalone PWA mode */
+    html.is-standalone, html.is-standalone body { position: fixed; inset: 0; overflow: hidden; }
+    html.is-standalone body { height: 100%; overflow-y: auto; }
     button, input, textarea, select { font: inherit; color: inherit; }
     button { background: none; border: none; padding: 0; cursor: pointer; }
     input, textarea {
@@ -397,6 +415,12 @@
       border-left: 3px solid var(--border-strong);
       color: var(--text-muted);
     }
+    /* Author-supplied colours are stripped at sanitize time, so quoted-reply
+       containers from Gmail/Outlook need their muted look restored here. */
+    .msg-body .gmail_quote,
+    .msg-body .gmail_attr,
+    .msg-body div[id^="divRplyFwdMsg"],
+    .msg-body div[id^="appendonsend"] ~ * { color: var(--text-muted); }
 
     /* reply composer */
     .composer {
@@ -1397,6 +1421,52 @@
     }
     .btn-link:hover { color: var(--accent); }
     .advanced-section { padding-top: 4px; border-top: 1px dashed var(--border); }
+
+    /* ============ PWA banners ============ */
+    .pwa-install-bar, .pwa-update-bar {
+      position: fixed;
+      left: 50%;
+      bottom: calc(var(--safe-bottom) + 12px);
+      transform: translateX(-50%);
+      max-width: 92vw;
+      width: max-content;
+      z-index: 100;
+      padding: 12px 14px;
+      border-radius: 14px;
+      box-shadow: var(--shadow-2);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 13.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .pwa-install-bar button, .pwa-update-bar button {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .pwa-install-bar button:not([aria-label]),
+    .pwa-update-bar button:not([aria-label]) {
+      background: var(--accent);
+      color: white;
+    }
+    .pwa-install-bar button[aria-label],
+    .pwa-update-bar button[aria-label] {
+      background: transparent;
+      color: var(--text-faint);
+      font-weight: 700;
+      font-size: 18px;
+      line-height: 1;
+      padding: 4px 8px;
+    }
+    .pwa-update-bar { background: var(--accent); color: white; border-color: transparent; }
+    .pwa-update-bar button[aria-label] { color: rgba(255,255,255,.7); }
+    .pwa-update-bar button:not([aria-label]) { background: white; color: var(--accent); }
+    html.is-standalone .pwa-install-bar { display: none; }
   </style>
 </head>
 <body>
@@ -2576,6 +2646,7 @@
           // Collapse the composer after a successful send
           setComposerOpen(false);
           updatePillText();
+          if (window.__buzz) window.__buzz(10);
           toast(
             result.kind === 'note'
               ? (result.threadId ? 'Note posted to thread' : 'Internal note posted')
@@ -3409,7 +3480,8 @@
     }
     function escapeAttr(s) { return escapeHtml(s); }
 
-    // very small HTML sanitizer for message bodies — strips scripts/styles/event handlers.
+    // very small HTML sanitizer for message bodies — strips scripts/styles/event handlers,
+    // and strips any author-supplied colours so the app theme always wins contrast.
     function sanitizeHtml(html) {
       const tpl = document.createElement('template');
       tpl.innerHTML = String(html || '');
@@ -3422,12 +3494,24 @@
           remove.push(n);
           continue;
         }
-        // strip on* handlers and javascript: urls
+        // Drop legacy colour attributes from email HTML (<font color="#000">, <body bgcolor="…">, etc.)
+        ['color', 'bgcolor', 'text', 'link', 'vlink', 'alink'].forEach(a => n.removeAttribute(a));
+
         for (const attr of Array.from(n.attributes)) {
           const name = attr.name.toLowerCase();
           const val = (attr.value || '').trim();
           if (name.startsWith('on')) n.removeAttribute(attr.name);
           else if ((name === 'href' || name === 'src') && /^javascript:/i.test(val)) n.removeAttribute(attr.name);
+          else if (name === 'style') {
+            // Strip colour-related declarations so theme tokens (--text, --surface) win contrast.
+            const cleaned = val
+              .split(';')
+              .map(s => s.trim())
+              .filter(s => s && !/^(color|background|background-color)\s*:/i.test(s))
+              .join('; ');
+            if (cleaned) n.setAttribute('style', cleaned);
+            else n.removeAttribute('style');
+          }
         }
         if (tag === 'a' && n.hasAttribute('href')) {
           n.setAttribute('target', '_blank');
@@ -3488,6 +3572,131 @@
       Pylon.me().then(me => { state.me = (me && (me.data || me)) || null; render(); }).catch(() => render());
       loadIssues();
     }
+
+    // ============ PWA: service worker + install handling ============
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.navigator.standalone === true;
+
+    // Add a class so we can hide install hints when already installed
+    if (isStandalone) document.documentElement.classList.add('is-standalone');
+
+    // Register service worker (file:// won't allow this — only when served over http(s))
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').then((reg) => {
+          // Detect new versions and offer to refresh
+          function watchForUpdate(installing) {
+            if (!installing) return;
+            installing.addEventListener('statechange', () => {
+              if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                showUpdateBanner(reg);
+              }
+            });
+          }
+          if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg);
+          reg.addEventListener('updatefound', () => watchForUpdate(reg.installing));
+        }).catch(() => {});
+
+        // When the active SW changes, reload to pick up the new shell.
+        let reloading = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (reloading) return;
+          reloading = true;
+          window.location.reload();
+        });
+      });
+    }
+
+    function showUpdateBanner(reg) {
+      // Build a small bottom banner so the user can choose to refresh
+      let bar = document.getElementById('pwa-update-bar');
+      if (bar) return;
+      bar = document.createElement('div');
+      bar.id = 'pwa-update-bar';
+      bar.className = 'pwa-update-bar';
+      bar.innerHTML = `
+        <span>A new version is available.</span>
+        <button type="button" id="pwa-update-refresh">Refresh</button>
+        <button type="button" id="pwa-update-dismiss" aria-label="Dismiss">×</button>
+      `;
+      document.body.appendChild(bar);
+      document.getElementById('pwa-update-refresh').onclick = () => {
+        if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+      };
+      document.getElementById('pwa-update-dismiss').onclick = () => bar.remove();
+    }
+
+    // Android / desktop Chrome: capture the install prompt and offer it ourselves
+    let deferredInstall = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstall = e;
+      maybeShowAndroidInstallBanner();
+    });
+    window.addEventListener('appinstalled', () => {
+      deferredInstall = null;
+      const b = document.getElementById('pwa-install-bar');
+      if (b) b.remove();
+    });
+
+    function maybeShowAndroidInstallBanner() {
+      if (!deferredInstall) return;
+      if (isStandalone) return;
+      if (sessionStorage.getItem('pwa-install-dismissed') === '1') return;
+      let bar = document.getElementById('pwa-install-bar');
+      if (bar) return;
+      bar = document.createElement('div');
+      bar.id = 'pwa-install-bar';
+      bar.className = 'pwa-install-bar';
+      bar.innerHTML = `
+        <span>Install Pylon Mobile to your home screen for a faster experience.</span>
+        <button type="button" id="pwa-install-yes">Install</button>
+        <button type="button" id="pwa-install-no" aria-label="Dismiss">×</button>
+      `;
+      document.body.appendChild(bar);
+      document.getElementById('pwa-install-yes').onclick = async () => {
+        const e = deferredInstall;
+        deferredInstall = null;
+        bar.remove();
+        if (e) e.prompt();
+      };
+      document.getElementById('pwa-install-no').onclick = () => {
+        sessionStorage.setItem('pwa-install-dismissed', '1');
+        bar.remove();
+      };
+    }
+
+    // iOS Safari: no beforeinstallprompt — show a one-off hint banner
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent || '') && !/crios|fxios|edgios/i.test(navigator.userAgent || '');
+    if (isIos && !isStandalone && !localStorage.getItem('pwa-ios-hint-dismissed')) {
+      window.addEventListener('load', () => {
+        const bar = document.createElement('div');
+        bar.id = 'pwa-ios-hint';
+        bar.className = 'pwa-install-bar';
+        bar.innerHTML = `
+          <span>
+            Install: tap
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+            </svg>
+            then <strong>Add to Home Screen</strong>.
+          </span>
+          <button type="button" id="pwa-ios-hint-dismiss" aria-label="Dismiss">×</button>
+        `;
+        document.body.appendChild(bar);
+        document.getElementById('pwa-ios-hint-dismiss').onclick = () => {
+          localStorage.setItem('pwa-ios-hint-dismissed', '1');
+          bar.remove();
+        };
+      });
+    }
+
+    // Light haptic feedback on key actions for native feel (Android only — iOS Safari ignores)
+    window.__buzz = function (ms) {
+      try { if (navigator.vibrate) navigator.vibrate(ms || 8); } catch {}
+    };
 
   })();
   </script>
