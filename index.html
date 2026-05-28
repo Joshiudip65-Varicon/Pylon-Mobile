@@ -471,7 +471,19 @@
       word-wrap: break-word;
       overflow-wrap: anywhere;
     }
-    .msg-body img { max-width: 100%; height: auto; border-radius: 8px; }
+    /* Inline images from email bodies. !important here defeats any width/height
+       attributes (e.g. <img width="600">) that authors set in their email HTML —
+       on a narrow phone bubble those make screenshots look squashed. */
+    .msg-body img {
+      max-width: 100% !important;
+      width: auto !important;
+      height: auto !important;
+      border-radius: 8px;
+      display: block;
+      margin: 6px 0;
+      cursor: zoom-in;
+    }
+    .msg-body a > img { cursor: zoom-in; }
     .msg-body p { margin: 0 0 .8em; }
     .msg-body p:last-child { margin-bottom: 0; }
     .msg-body blockquote {
@@ -576,6 +588,79 @@
       justify-content: center;
       flex-shrink: 0;
     }
+    .att-image img { cursor: zoom-in; }
+
+    /* Full-screen image lightbox. Opens when any inline image or attachment
+       thumbnail is tapped so the user can actually read the contents. */
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .92);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: calc(var(--safe-top) + 12px) 12px calc(var(--safe-bottom) + 12px);
+      opacity: 0;
+      transition: opacity .18s ease;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .lightbox.is-open { opacity: 1; }
+    .lightbox-img-wrap {
+      max-width: 100%;
+      max-height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pinch-zoom;
+    }
+    .lightbox-img-wrap img {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      border-radius: 6px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
+      pointer-events: auto;
+    }
+    .lightbox-close, .lightbox-open-orig {
+      position: absolute;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, .18);
+      background: rgba(255, 255, 255, .12);
+      color: #fff;
+      backdrop-filter: blur(14px) saturate(160%);
+      -webkit-backdrop-filter: blur(14px) saturate(160%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color .15s ease, transform .12s ease;
+    }
+    .lightbox-close { top: calc(var(--safe-top) + 12px); right: 12px; }
+    .lightbox-open-orig {
+      bottom: calc(var(--safe-bottom) + 16px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: auto;
+      height: auto;
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      letter-spacing: .01em;
+      gap: 6px;
+    }
+    .lightbox-close:hover, .lightbox-open-orig:hover { background: rgba(255, 255, 255, .2); }
+    .lightbox-close:active, .lightbox-open-orig:active { transform: scale(.95); }
+    .lightbox-open-orig:active { transform: translateX(-50%) scale(.96); }
 
     /* Author-supplied colours are stripped at sanitize time, but as a belt-and-braces
        guard we also force the theme text colour on every message-body element with
@@ -3906,6 +3991,78 @@
       }
     }
 
+    // ============ Image lightbox ============
+    // Single delegated click handler — any tap on an image inside a message
+    // body or an attachment thumbnail opens the lightbox.
+    document.addEventListener('click', function (e) {
+      const img = e.target && e.target.closest
+        ? e.target.closest('.msg-body img, .att-image img')
+        : null;
+      if (!img) return;
+      // Suppress any wrapping <a href="...tracker..."> link
+      e.preventDefault();
+      e.stopPropagation();
+      openLightbox(img.currentSrc || img.src, img.alt || '');
+    }, true);
+
+    let lightboxEl = null;
+    let lightboxPrevOverflow = '';
+    function openLightbox(src, alt) {
+      if (!src) return;
+      closeLightbox(); // close any previous instance first
+      const wrap = document.createElement('div');
+      wrap.className = 'lightbox';
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-modal', 'true');
+      wrap.setAttribute('aria-label', 'Image preview');
+      wrap.innerHTML =
+        '<button type="button" class="lightbox-close" aria-label="Close">' +
+        '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"' +
+        ' stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+        '</button>' +
+        '<div class="lightbox-img-wrap">' +
+          '<img alt="' + escapeAttr(alt) + '" />' +
+        '</div>' +
+        '<a class="lightbox-open-orig" href="' + escapeAttr(src) + '"' +
+        ' target="_blank" rel="noopener noreferrer">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"' +
+        ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>' +
+        '<polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
+        '<span>Open original (pinch to zoom)</span></a>';
+      // Set src after the element is in the DOM so loading="lazy" doesn't bite us
+      const innerImg = wrap.querySelector('img');
+      innerImg.src = src;
+      document.body.appendChild(wrap);
+      lightboxEl = wrap;
+      lightboxPrevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+
+      // Tap outside the image to close; tap the close button to close
+      wrap.addEventListener('click', function (ev) {
+        if (ev.target === wrap || ev.target.closest('.lightbox-close')) closeLightbox();
+      });
+
+      // Escape key closes (mainly for desktop / keyboard users)
+      document.addEventListener('keydown', onLightboxKey);
+
+      // Fade in
+      requestAnimationFrame(function () { wrap.classList.add('is-open'); });
+    }
+
+    function closeLightbox() {
+      if (!lightboxEl) return;
+      const el = lightboxEl;
+      lightboxEl = null;
+      document.removeEventListener('keydown', onLightboxKey);
+      document.body.style.overflow = lightboxPrevOverflow;
+      el.classList.remove('is-open');
+      // Wait for fade-out, then remove
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 180);
+    }
+    function onLightboxKey(e) { if (e.key === 'Escape') closeLightbox(); }
+
     // ============ Boot ============
     if (!cfg.apiKey) {
       render();
@@ -4116,6 +4273,8 @@
 
       document.addEventListener('touchstart', function (e) {
         if (refreshing) return;
+        // Don't activate pull-to-refresh while the lightbox is open
+        if (document.querySelector('.lightbox')) { pulling = false; return; }
         if (e.touches.length !== 1) { pulling = false; return; }
         if (getScrollTop() > 0) { pulling = false; return; }
         if (!canRefresh()) { pulling = false; return; }
