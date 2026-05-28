@@ -480,6 +480,103 @@
       border-left: 3px solid var(--border-strong);
       color: var(--text-muted);
     }
+    /* Attachments — shown under the message body for messages with file_urls. */
+    .attachments {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .att-images {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .att-image {
+      display: block;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      max-width: 100%;
+      line-height: 0;
+      transition: transform .12s ease, box-shadow .15s ease;
+    }
+    .att-image:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(20,12,40,.12); }
+    .att-image img {
+      display: block;
+      max-width: 220px;
+      max-height: 200px;
+      width: auto;
+      height: auto;
+      object-fit: cover;
+    }
+    .att-files {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .att-file {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-2);
+      color: var(--text);
+      text-decoration: none;
+      transition: background-color .15s, border-color .15s, transform .12s;
+    }
+    .att-file:hover, .att-file:focus-visible {
+      background: var(--surface);
+      border-color: var(--border-strong);
+    }
+    .att-file:active { transform: scale(.99); }
+    .att-file-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .att-file-meta {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .att-file-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .att-file-ext {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-faint);
+      letter-spacing: .05em;
+    }
+    .att-file-open {
+      color: var(--text-faint);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
     /* Author-supplied colours are stripped at sanitize time, but as a belt-and-braces
        guard we also force the theme text colour on every message-body element with
        !important. This means even if an exotic inline colour (or a colour set by a
@@ -2804,6 +2901,27 @@
         system: isSystem,
       });
 
+      // Attachments: Pylon returns these as message.file_urls (per its OpenAPI).
+      // Fall back to a few other common shapes just in case different endpoints
+      // wrap things differently.
+      const fileUrls = []
+        .concat(Array.isArray(m.file_urls) ? m.file_urls : [])
+        .concat(Array.isArray(m.attachment_urls) ? m.attachment_urls : [])
+        .concat(Array.isArray(m.attachments)
+          ? m.attachments.map(a => (typeof a === 'string' ? a : (a.url || a.download_url || a.href || ''))).filter(Boolean)
+          : [])
+        .filter(Boolean);
+      // Hide any URL that's already shown inline as <img src> in the body, so we
+      // don't duplicate inline images as both <img> and as a thumbnail chip.
+      const inlineSrcs = new Set();
+      try {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        tmp.querySelectorAll('img[src]').forEach(img => inlineSrcs.add(img.getAttribute('src')));
+      } catch {}
+      const uniqueFiles = Array.from(new Set(fileUrls)).filter(u => !inlineSrcs.has(u));
+      const attachmentsHtml = uniqueFiles.length ? renderAttachments(uniqueFiles) : '';
+
       return `
         <li class="msg ${isInternal ? 'msg-internal' : ''}">
           ${avatar}
@@ -2816,9 +2934,85 @@
               <span class="msg-time" style="margin-left:auto;">${when ? escapeHtml(formatDateTime(when)) : ''}</span>
             </div>
             <div class="msg-body">${html}</div>
+            ${attachmentsHtml}
           </div>
         </li>
       `;
+    }
+
+    // Build the attachment strip for a message. Images render as tap-to-open
+    // thumbnails; everything else as a chip with filename + icon.
+    function renderAttachments(urls) {
+      const items = urls.map(u => describeAttachment(u));
+      const images = items.filter(it => it.kind === 'image');
+      const files  = items.filter(it => it.kind !== 'image');
+      let out = '<div class="attachments">';
+      if (images.length) {
+        out += '<div class="att-images">' + images.map(it =>
+          `<a class="att-image" href="${escapeAttr(it.url)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(it.name)}">
+             <img src="${escapeAttr(it.url)}" alt="${escapeAttr(it.name)}" loading="lazy" />
+           </a>`
+        ).join('') + '</div>';
+      }
+      if (files.length) {
+        out += '<ul class="att-files">' + files.map(it =>
+          `<li><a class="att-file" href="${escapeAttr(it.url)}" target="_blank" rel="noopener noreferrer" download>
+             <span class="att-file-icon">${attachmentIconSvg(it.ext)}</span>
+             <span class="att-file-meta">
+               <span class="att-file-name">${escapeHtml(it.name)}</span>
+               <span class="att-file-ext">${escapeHtml((it.ext || 'file').toUpperCase())}</span>
+             </span>
+             <span class="att-file-open" aria-hidden="true">
+               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><polyline points="7 7 17 7 17 17"/></svg>
+             </span>
+           </a></li>`
+        ).join('') + '</ul>';
+      }
+      out += '</div>';
+      return out;
+    }
+
+    // Pull a friendly filename + extension out of an attachment URL.
+    function describeAttachment(url) {
+      let name = '';
+      let ext = '';
+      try {
+        const u = new URL(url, location.href);
+        const last = (u.pathname.split('/').pop() || '').trim();
+        name = decodeURIComponent(last) || 'Attachment';
+      } catch {
+        name = (url.split('/').pop() || 'Attachment').split('?')[0];
+      }
+      const dot = name.lastIndexOf('.');
+      if (dot > 0 && dot < name.length - 1) ext = name.slice(dot + 1).toLowerCase();
+      const imageExts = ['png','jpg','jpeg','gif','webp','svg','heic','heif','bmp','tiff'];
+      const kind = imageExts.includes(ext) ? 'image' : 'file';
+      return { url, name, ext, kind };
+    }
+
+    // Icon picker for the attachment chip. Returns inline SVG so it inherits
+    // currentColor and looks correct in both light and dark themes.
+    function attachmentIconSvg(ext) {
+      const e = (ext || '').toLowerCase();
+      const docExts = ['pdf','doc','docx','xls','xlsx','ppt','pptx','txt','csv','rtf','odt','ods','odp'];
+      const archiveExts = ['zip','rar','7z','tar','gz','tgz'];
+      const codeExts = ['js','ts','json','xml','html','css','py','rb','go','java','c','cpp','sh'];
+      const mediaExts = ['mp4','mov','avi','mkv','webm','mp3','wav','m4a','aac','ogg'];
+      const base = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">';
+      if (docExts.includes(e)) {
+        return base + '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>';
+      }
+      if (archiveExts.includes(e)) {
+        return base + '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M12 7v10M9 9h6M9 12h6M9 15h6"/></svg>';
+      }
+      if (codeExts.includes(e)) {
+        return base + '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
+      }
+      if (mediaExts.includes(e)) {
+        return base + '<polygon points="5 3 19 12 5 21 5 3"/></svg>';
+      }
+      // Generic file
+      return base + '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>';
     }
 
     function renderSettings() {
