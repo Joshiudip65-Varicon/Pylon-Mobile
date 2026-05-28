@@ -608,14 +608,14 @@
     }
     .lightbox.is-open { opacity: 1; }
     .lightbox-img-wrap {
-      max-width: 100%;
-      max-height: 100%;
+      width: 100%;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: auto;
-      -webkit-overflow-scrolling: touch;
-      touch-action: pinch-zoom;
+      /* All gestures are handled in JS — tell the browser to deliver them raw. */
+      touch-action: none;
+      overflow: hidden;
     }
     .lightbox-img-wrap img {
       max-width: 100%;
@@ -625,7 +625,11 @@
       object-fit: contain;
       border-radius: 6px;
       box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
-      pointer-events: auto;
+      transform-origin: center center;
+      will-change: transform;
+      user-select: none;
+      -webkit-user-drag: none;
+      /* Long-press save sheet stays available — useful in a photo viewer. */
     }
     .lightbox-close, .lightbox-open-orig {
       position: absolute;
@@ -4022,7 +4026,7 @@
         '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
         '</button>' +
         '<div class="lightbox-img-wrap">' +
-          '<img alt="' + escapeAttr(alt) + '" />' +
+          '<img alt="' + escapeAttr(alt) + '" draggable="false" />' +
         '</div>' +
         '<a class="lightbox-open-orig" href="' + escapeAttr(src) + '"' +
         ' target="_blank" rel="noopener noreferrer">' +
@@ -4030,21 +4034,118 @@
         ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>' +
         '<polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
-        '<span>Open original (pinch to zoom)</span></a>';
-      // Set src after the element is in the DOM so loading="lazy" doesn't bite us
-      const innerImg = wrap.querySelector('img');
-      innerImg.src = src;
+        '<span>Open in browser</span></a>';
+      const imgWrap = wrap.querySelector('.lightbox-img-wrap');
+      const img = wrap.querySelector('img');
+      img.src = src;
       document.body.appendChild(wrap);
       lightboxEl = wrap;
       lightboxPrevOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
 
-      // Tap outside the image to close; tap the close button to close
-      wrap.addEventListener('click', function (ev) {
-        if (ev.target === wrap || ev.target.closest('.lightbox-close')) closeLightbox();
+      // ----- Pinch zoom + pan + double-tap -----
+      let scale = 1, tx = 0, ty = 0;
+      let startScale = 1, startTx = 0, startTy = 0;
+      let startDist = 0, startMid = { x: 0, y: 0 };
+      let panAnchor = null;
+      let lastTapAt = 0;
+
+      function applyT() {
+        img.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + ')';
+      }
+      function snapReset(animate) {
+        scale = 1; tx = 0; ty = 0;
+        if (animate) {
+          img.style.transition = 'transform .22s ease';
+          applyT();
+          setTimeout(function () { img.style.transition = ''; }, 240);
+        } else {
+          applyT();
+        }
+      }
+      function distOf(t1, t2) {
+        return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      }
+      function midOf(t1, t2) {
+        return { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+      }
+
+      imgWrap.addEventListener('touchstart', function (e) {
+        if (e.touches.length === 2) {
+          e.preventDefault();
+          startScale = scale;
+          startTx = tx; startTy = ty;
+          startDist = distOf(e.touches[0], e.touches[1]);
+          startMid  = midOf(e.touches[0], e.touches[1]);
+          panAnchor = null;
+        } else if (e.touches.length === 1 && scale > 1) {
+          panAnchor = { x: e.touches[0].clientX - tx, y: e.touches[0].clientY - ty };
+        }
+      }, { passive: false });
+
+      imgWrap.addEventListener('touchmove', function (e) {
+        if (e.touches.length === 2 && startDist > 0) {
+          e.preventDefault();
+          const d = distOf(e.touches[0], e.touches[1]);
+          const m = midOf(e.touches[0], e.touches[1]);
+          // Scale clamped to [1, 6]
+          scale = Math.max(1, Math.min(6, startScale * (d / startDist)));
+          // Pan by midpoint movement so the gesture feels anchored under fingers
+          tx = startTx + (m.x - startMid.x);
+          ty = startTy + (m.y - startMid.y);
+          applyT();
+        } else if (e.touches.length === 1 && scale > 1 && panAnchor) {
+          e.preventDefault();
+          tx = e.touches[0].clientX - panAnchor.x;
+          ty = e.touches[0].clientY - panAnchor.y;
+          applyT();
+        }
+      }, { passive: false });
+
+      imgWrap.addEventListener('touchend', function (e) {
+        if (e.touches.length < 2) startDist = 0;
+        if (e.touches.length > 0) return;
+        panAnchor = null;
+        // If barely zoomed (e.g. accidental pinch), snap back
+        if (scale < 1.05) {
+          snapReset(true);
+          lastTapAt = 0;
+          return;
+        }
+        // Double-tap toggle: zoom out if zoomed, zoom in if not
+        const now = Date.now();
+        if (now - lastTapAt < 280 && e.changedTouches.length === 1) {
+          img.style.transition = 'transform .22s ease';
+          if (scale > 1) { scale = 1; tx = 0; ty = 0; }
+          else { scale = 2.5; tx = 0; ty = 0; }
+          applyT();
+          setTimeout(function () { img.style.transition = ''; }, 240);
+          lastTapAt = 0;
+        } else {
+          lastTapAt = now;
+        }
       });
 
-      // Escape key closes (mainly for desktop / keyboard users)
+      // Desktop: scroll wheel zooms (handy for testing in a browser)
+      imgWrap.addEventListener('wheel', function (e) {
+        if (!e.ctrlKey && Math.abs(e.deltaY) < 5) return;
+        e.preventDefault();
+        const delta = -e.deltaY * 0.004;
+        scale = Math.max(1, Math.min(6, scale + delta));
+        if (scale === 1) { tx = 0; ty = 0; }
+        applyT();
+      }, { passive: false });
+
+      // Tap-to-close — only when not zoomed; never closes when tapping the
+      // image itself or the open-in-browser link.
+      wrap.addEventListener('click', function (ev) {
+        if (ev.target.closest('.lightbox-close')) { closeLightbox(); return; }
+        if (ev.target.closest('img') || ev.target.closest('.lightbox-open-orig')) return;
+        if (scale > 1) return;
+        closeLightbox();
+      });
+
+      // Escape closes (mainly for desktop / keyboard users)
       document.addEventListener('keydown', onLightboxKey);
 
       // Fade in
