@@ -415,12 +415,25 @@
       border-left: 3px solid var(--border-strong);
       color: var(--text-muted);
     }
-    /* Author-supplied colours are stripped at sanitize time, so quoted-reply
-       containers from Gmail/Outlook need their muted look restored here. */
+    /* Author-supplied colours are stripped at sanitize time, but as a belt-and-braces
+       guard we also force the theme text colour on every message-body element with
+       !important. This means even if an exotic inline colour (or a colour set by a
+       newly-introduced email format) survives sanitisation, contrast is preserved in
+       both light and dark mode. */
+    .msg-body,
+    .msg-body * { color: var(--text) !important; background-color: transparent !important; }
+    /* Links keep the accent colour. */
+    .msg-body a,
+    .msg-body a * { color: var(--accent) !important; }
+    /* Quoted-reply containers (Gmail, Outlook) should still look muted. */
+    .msg-body blockquote,
+    .msg-body blockquote *,
     .msg-body .gmail_quote,
+    .msg-body .gmail_quote *,
     .msg-body .gmail_attr,
     .msg-body div[id^="divRplyFwdMsg"],
-    .msg-body div[id^="appendonsend"] ~ * { color: var(--text-muted); }
+    .msg-body div[id^="divRplyFwdMsg"] *,
+    .msg-body div[id^="appendonsend"] ~ * { color: var(--text-muted) !important; }
 
     /* reply composer */
     .composer {
