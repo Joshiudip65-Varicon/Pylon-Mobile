@@ -171,6 +171,34 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    /* Small inline copy button shown next to the ticket # in the header on detail view. */
+    .hdr-copy-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      vertical-align: -6px;
+      margin-left: 6px;
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background-color .15s, color .15s, transform .12s;
+    }
+    .hdr-copy-btn:hover, .hdr-copy-btn:focus-visible {
+      background: var(--surface);
+      color: var(--accent);
+    }
+    .hdr-copy-btn:active { transform: scale(.92); background: var(--border); }
+    .hdr-copy-btn svg { display: block; }
+    .hdr-copy-btn.is-copied {
+      color: var(--success);
+      border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+      background: color-mix(in srgb, var(--success) 12%, var(--surface-2));
+    }
     .icon-btn {
       width: var(--tap);
       height: var(--tap);
@@ -1866,7 +1894,27 @@
         hdrLeft.hidden = true;
         hdrRight.hidden = true;
       } else if (state.view === 'detail') {
-        hdrTitle.textContent = state.issue ? `#${state.issue.number || state.issue.id || ''}` : 'Issue';
+        const issue = state.issue;
+        if (issue) {
+          const num = issue.number || issue.id || '';
+          const canCopy = issue.number != null;
+          hdrTitle.innerHTML =
+            '<span>#' + escapeHtml(String(num)) + '</span>' +
+            (canCopy
+              ? '<button type="button" class="hdr-copy-btn" id="hdrCopyBtn"' +
+                ' aria-label="Copy ticket URL" title="Copy ticket URL">' +
+                '<svg viewBox="0 0 24 24" width="14" height="14" fill="none"' +
+                ' stroke="currentColor" stroke-width="2" stroke-linecap="round"' +
+                ' stroke-linejoin="round">' +
+                '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>' +
+                '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>' +
+                '</svg></button>'
+              : '');
+          const copyBtn = document.getElementById('hdrCopyBtn');
+          if (copyBtn) copyBtn.addEventListener('click', copyIssueUrl);
+        } else {
+          hdrTitle.textContent = 'Issue';
+        }
         hdrLeft.hidden = false;
         hdrRight.hidden = true;
       } else if (state.view === 'settings') {
@@ -3616,6 +3664,52 @@
       // Preserve the full Pylon error message verbatim — the API often returns
       // useful detail (missing field, bad enum, etc).
       return msg;
+    }
+
+    // Copy the current issue's Pylon web URL to the clipboard. Triggered by the
+    // small copy button next to the # number in the detail-view header.
+    async function copyIssueUrl(e) {
+      if (e && e.stopPropagation) e.stopPropagation();
+      const issue = state.issue;
+      const num = issue && issue.number;
+      if (num == null) { toast('No ticket number to copy', 'error'); return; }
+      const url = 'https://app.usepylon.com/issues?issueNumber=' + encodeURIComponent(num);
+      const btn = document.getElementById('hdrCopyBtn');
+      let copied = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext !== false) {
+          await navigator.clipboard.writeText(url);
+          copied = true;
+        } else {
+          throw new Error('clipboard API unavailable');
+        }
+      } catch {
+        // Fallback for older Safari and non-secure contexts: hidden textarea + execCommand
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = url;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          ta.style.top = '0';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          ta.setSelectionRange(0, url.length);
+          copied = document.execCommand && document.execCommand('copy');
+          document.body.removeChild(ta);
+        } catch { copied = false; }
+      }
+      if (copied) {
+        toast('Ticket URL copied', 'success');
+        if (window.__buzz) window.__buzz(8);
+        if (btn) {
+          btn.classList.add('is-copied');
+          setTimeout(function () { btn.classList.remove('is-copied'); }, 1200);
+        }
+      } else {
+        toast('Copy failed — ' + url, 'error');
+      }
     }
 
     // ============ Boot ============
