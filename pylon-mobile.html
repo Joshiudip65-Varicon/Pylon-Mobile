@@ -1953,7 +1953,7 @@
     // ============ Config / Storage ============
     const STORAGE_KEY = 'pylonMobile.config.v1';
     const DEFAULT_BASE = 'https://api.usepylon.com';
-    const DEFAULT_AI_MODEL = 'gemini-2.0-flash';
+    const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
       "Keep my intent and voice, but make the message clearer, friendlier, and more professional. " +
@@ -1971,15 +1971,16 @@
         };
         if (!raw) return defaults;
         const merged = Object.assign(defaults, JSON.parse(raw));
-        // Migration: v13/v14 used Claude models + the Anthropic API. v15+
-        // uses Google Gemini. Reset stale Claude config so the user doesn't
-        // hit a 404 against the Gemini endpoint with a claude-* model.
-        if (merged.aiModel && /^claude-/i.test(merged.aiModel)) {
+        // Migration: v13/v14 used Anthropic, v15 used Google Gemini, v17+ uses
+        // Groq (the Gemini free tier was effectively unavailable on Workspace/
+        // billing-attached Google accounts). Reset any stale model so the
+        // request shape matches the active provider.
+        if (merged.aiModel && (/^claude-/i.test(merged.aiModel) || /^gemini-/i.test(merged.aiModel))) {
           merged.aiModel = DEFAULT_AI_MODEL;
         }
-        if (merged.aiApiKey && /^sk-ant-/i.test(merged.aiApiKey)) {
-          // The old key won't authenticate against Gemini; clear it so the
-          // user knows to paste their new Google AI Studio key.
+        // Old keys from prior providers won't auth against Groq (Groq keys
+        // look like gsk_...). Clear known foreign key shapes.
+        if (merged.aiApiKey && (/^sk-ant-/i.test(merged.aiApiKey) || /^AIza/i.test(merged.aiApiKey))) {
           merged.aiApiKey = '';
         }
         return merged;
@@ -2818,7 +2819,7 @@
                 <span id="threadPickerLabel">Default thread</span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6;"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
-              <button type="button" class="composer-ai" id="aiRefineBtn" title="Refine with Gemini" aria-label="Refine draft with Gemini">
+              <button type="button" class="composer-ai" id="aiRefineBtn" title="Refine with AI" aria-label="Refine draft with AI">
                 <svg class="ai-sparkle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 3l1.8 4.5L18 9l-4.2 1.5L12 15l-1.8-4.5L6 9l4.2-1.5L12 3z"/>
                   <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z"/>
@@ -3373,10 +3374,10 @@
           </div>
 
           <div class="list-card">
-            <div class="list-row-header">AI assist (Google Gemini — free tier)</div>
+            <div class="list-row-header">AI assist (Groq — free tier)</div>
             <button class="list-row" id="editAiKey">
               <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
-              <span class="body"><span class="l1">Google AI API key</span><span class="l2">${escapeHtml(cfg.aiApiKey ? cfg.aiApiKey.slice(0, 6) + '••••••' + cfg.aiApiKey.slice(-4) : 'Not set — free key at aistudio.google.com')}</span></span>
+              <span class="body"><span class="l1">Groq API key</span><span class="l2">${escapeHtml(cfg.aiApiKey ? cfg.aiApiKey.slice(0, 6) + '••••••' + cfg.aiApiKey.slice(-4) : 'Not set — free key at console.groq.com')}</span></span>
               <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
             </button>
             <button class="list-row" id="editAiPrompt">
@@ -3414,9 +3415,9 @@
       document.getElementById('editBase').addEventListener('click', () => promptAndSave('API base URL', cfg.base, (v) => { cfg.base = v || DEFAULT_BASE; saveConfig(); toast('Base URL updated', 'success'); render(); }));
       document.getElementById('editProxy').addEventListener('click', () => promptAndSave('CORS proxy URL (leave blank for direct)', cfg.proxy || '', (v) => { cfg.proxy = v.trim(); saveConfig(); toast(cfg.proxy ? 'Proxy enabled' : 'Proxy cleared', 'success'); render(); }));
       document.getElementById('editSignature').addEventListener('click', () => { state.view = 'signature'; render(); });
-      document.getElementById('editAiKey').addEventListener('click', () => promptAndSave('Google AI API key (free at aistudio.google.com → Get API key)', '', (v) => { cfg.aiApiKey = v.trim(); saveConfig(); toast(cfg.aiApiKey ? 'AI key saved' : 'AI key cleared', 'success'); render(); }));
+      document.getElementById('editAiKey').addEventListener('click', () => promptAndSave('Groq API key (free at console.groq.com → API Keys)', '', (v) => { cfg.aiApiKey = v.trim(); saveConfig(); toast(cfg.aiApiKey ? 'AI key saved' : 'AI key cleared', 'success'); render(); }));
       document.getElementById('editAiPrompt').addEventListener('click', () => promptAndSave('System prompt (multi-line OK; leave blank for default)', cfg.aiSystemPrompt || '', (v) => { cfg.aiSystemPrompt = v.trim(); saveConfig(); toast(cfg.aiSystemPrompt ? 'System prompt saved' : 'Using default prompt', 'success'); render(); }));
-      document.getElementById('editAiModel').addEventListener('click', () => promptAndSave('Gemini model (e.g. gemini-2.0-flash, gemini-2.5-flash, gemini-2.0-flash-lite)', cfg.aiModel || DEFAULT_AI_MODEL, (v) => { cfg.aiModel = v.trim() || DEFAULT_AI_MODEL; saveConfig(); toast('Model saved: ' + cfg.aiModel, 'success'); render(); }));
+      document.getElementById('editAiModel').addEventListener('click', () => promptAndSave('Groq model (e.g. llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768)', cfg.aiModel || DEFAULT_AI_MODEL, (v) => { cfg.aiModel = v.trim() || DEFAULT_AI_MODEL; saveConfig(); toast('Model saved: ' + cfg.aiModel, 'success'); render(); }));
       document.getElementById('viewNetLog').addEventListener('click', () => { state.view = 'netlog'; render(); });
       document.getElementById('signOut').addEventListener('click', () => {
         if (!confirm('Sign out and forget your API key on this device?')) return;
@@ -4353,7 +4354,7 @@
       });
     }
 
-    // ============ AI assist (Google Gemini) ============
+    // ============ AI assist (Groq) ============
     // Strip HTML from a message body into plain text for sending to Claude.
     function htmlToPlainText(html) {
       try {
@@ -4399,46 +4400,43 @@
       return parts.join('\n');
     }
 
-    // POST to Google Generative Language API (Gemini). Free tier on Gemini
-    // 2.0 Flash is generous: ~1,500 requests/day. Get a key at
-    // aistudio.google.com → Get API key. CORS is supported out of the box.
-    async function callGemini({ system, userMessage, model, maxTokens }) {
-      if (!cfg.aiApiKey) throw new Error('No Google AI API key set. Add one in Settings → AI assist.');
+    // POST to Groq's OpenAI-compatible Chat Completions API. Groq's free tier
+    // is reliably free: 30 req/min, 14,400 req/day. Signup needs only an email
+    // — no Google account, no card. Get a key at console.groq.com → API Keys.
+    // CORS works out of the box for direct browser calls.
+    async function callGroq({ system, userMessage, model, maxTokens }) {
+      if (!cfg.aiApiKey) throw new Error('No Groq API key set. Add one in Settings → AI assist.');
       const modelId = model || cfg.aiModel || DEFAULT_AI_MODEL;
-      const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
-        encodeURIComponent(modelId) + ':generateContent?key=' + encodeURIComponent(cfg.aiApiKey);
+      const messages = [];
+      if (system && system.trim()) messages.push({ role: 'system', content: system });
+      messages.push({ role: 'user', content: userMessage });
       const body = {
-        contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-        generationConfig: {
-          maxOutputTokens: maxTokens || 2048,
-          temperature: 0.7,
-        },
+        model: modelId,
+        messages: messages,
+        max_tokens: maxTokens || 2048,
+        temperature: 0.7,
       };
-      if (system && system.trim()) {
-        body.systemInstruction = { parts: [{ text: system }] };
-      }
-      const resp = await fetch(url, {
+      const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + cfg.aiApiKey,
+        },
         body: JSON.stringify(body),
       });
       const text = await resp.text();
       let data = null;
       try { data = JSON.parse(text); } catch {}
       if (!resp.ok) {
-        const apiErr = (data && data.error && data.error.message) || text || ('HTTP ' + resp.status);
-        throw new Error('Gemini API ' + resp.status + ': ' + apiErr);
+        const apiErr = (data && data.error && (data.error.message || data.error.code)) || text || ('HTTP ' + resp.status);
+        throw new Error('Groq API ' + resp.status + ': ' + apiErr);
       }
-      // Extract text from candidates[0].content.parts[*].text
-      const cand = data && data.candidates && data.candidates[0];
-      const parts = (cand && cand.content && cand.content.parts) || [];
-      const out = parts.filter(function (p) { return typeof p.text === 'string'; })
-        .map(function (p) { return p.text; }).join('\n').trim();
-      if (!out) {
-        const reason = (cand && cand.finishReason) || (data && data.promptFeedback && data.promptFeedback.blockReason) || 'unknown';
-        throw new Error('Gemini returned no text (' + reason + ')');
+      const out = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+      if (!out || !out.trim()) {
+        const reason = (data && data.choices && data.choices[0] && data.choices[0].finish_reason) || 'unknown';
+        throw new Error('Groq returned no text (' + reason + ')');
       }
-      return out;
+      return out.trim();
     }
 
     // The whole flow: take the editor's current draft, build context from the
@@ -4449,7 +4447,7 @@
       if (!editor) return;
       const draft = (editor.textContent || '').trim();
       if (!draft) { toast('Write a draft first, then tap ✨', 'error'); return; }
-      if (!cfg.aiApiKey) { toast('Add your Google AI API key in Settings → AI assist', 'error'); return; }
+      if (!cfg.aiApiKey) { toast('Add your Groq API key in Settings → AI assist', 'error'); return; }
 
       const btn = document.getElementById('aiRefineBtn');
       if (btn) { btn.disabled = true; btn.classList.add('is-loading'); }
@@ -4457,7 +4455,7 @@
         const recent = Array.isArray(state.messages) ? state.messages.slice(-5) : [];
         const system = buildAiSystemPrompt(state.issue, recent);
         const userMessage = 'Here is my draft reply. Please refine it according to the system instructions.\n\n--- DRAFT ---\n' + draft + '\n--- END DRAFT ---';
-        const refined = await callGemini({ system, userMessage });
+        const refined = await callGroq({ system, userMessage });
         // Replace editor content. Convert plain text back to simple HTML so
         // the contenteditable shows line breaks.
         editor.innerHTML = '';
@@ -4468,7 +4466,7 @@
         });
         // Trigger any input listeners (e.g. send-button-enabled state)
         editor.dispatchEvent(new Event('input', { bubbles: true }));
-        toast('Refined with Gemini', 'success');
+        toast('Refined with Groq', 'success');
         if (window.__buzz) window.__buzz(10);
       } catch (e) {
         toast(e.message || String(e), 'error');
