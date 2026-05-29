@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, interactive-widget=resizes-content" />
   <meta name="theme-color" content="#6e56cf" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#0e0a1c" media="(prefers-color-scheme: dark)" />
   <meta name="description" content="Pylon support inbox for your phone — view, reply, manage tickets." />
@@ -331,8 +331,13 @@
 
     .main {
       flex: 1;
+      display: flex;
+      flex-direction: column;
       padding: 14px;
-      padding-bottom: calc(var(--safe-bottom) + 14px);
+      /* When the keyboard is open we want to give back the soft-bottom inset
+         the keyboard is already covering. --kb-inset is set by JS via
+         visualViewport on older iOS that ignores interactive-widget=resizes-content. */
+      padding-bottom: calc(max(var(--safe-bottom) - var(--kb-inset, 0px), 0px) + 14px);
     }
 
     /* -------- pull-to-refresh -------- */
@@ -802,13 +807,18 @@
     .msg-body div[id^="divRplyFwdMsg"] *,
     .msg-body div[id^="appendonsend"] ~ * { color: var(--text-muted) !important; }
 
-    /* reply composer */
+    /* Reply composer — pushes to the bottom of .main (flex column) so when there
+       are few messages it doesn't leave a big gap above the keyboard or below
+       the page. margin-top:auto is what does the pinning. */
     .composer {
-      position: sticky;
-      bottom: 0;
-      padding: 12px 0 calc(var(--safe-bottom) + 12px);
+      margin-top: auto;
+      padding: 12px 0 calc(max(var(--safe-bottom) - var(--kb-inset, 0px), 0px) + 12px);
       background: linear-gradient(to bottom, transparent, var(--bg) 22%);
-      margin-top: 24px;
+      /* When sticky positioning is still useful (long scrolling threads), keep
+         it as well — flex-end gives baseline placement, sticky keeps it pinned
+         while scrolling messages above. */
+      position: sticky;
+      bottom: var(--kb-inset, 0px);
     }
     .composer-card {
       background: var(--surface);
@@ -4566,6 +4576,31 @@
     window.__buzz = function (ms) {
       try { if (navigator.vibrate) navigator.vibrate(ms || 8); } catch {}
     };
+
+    // Keyboard tracking — iOS 16.4+/Chrome 108+ honour
+    // <meta viewport interactive-widget=resizes-content> and 100dvh shrinks for
+    // the keyboard automatically. For older iOS we fall back to visualViewport
+    // and expose --kb-inset (keyboard height) so the composer and main padding
+    // can adjust. Without this the composer stays anchored to the layout-
+    // viewport bottom, leaving dead space between it and the keyboard.
+    (function trackKeyboard() {
+      const vv = window.visualViewport;
+      if (!vv) return;
+      function update() {
+        // Keyboard inset = the difference between the layout viewport bottom
+        // and the visual viewport bottom (offsetTop accounts for any visual
+        // viewport scroll/pan caused by focused inputs).
+        const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+        document.documentElement.style.setProperty('--kb-inset', inset + 'px');
+      }
+      vv.addEventListener('resize', update);
+      vv.addEventListener('scroll', update);
+      window.addEventListener('orientationchange', function () {
+        // Defer until after iOS finishes the rotation
+        setTimeout(update, 200);
+      });
+      update();
+    })();
 
     // ============ Pull-to-refresh + background auto-refresh ============
     (function setupRefresh() {

@@ -10,7 +10,7 @@
  *    available" prompt and reload when the user is ready.
  */
 
-const VERSION = 'pylon-mobile-v11';
+const VERSION = 'pylon-mobile-v12';
 const SHELL_CACHE = `${VERSION}-shell`;
 
 const SHELL_ASSETS = [
