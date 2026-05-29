@@ -1943,15 +1943,14 @@
     // ============ Config / Storage ============
     const STORAGE_KEY = 'pylonMobile.config.v1';
     const DEFAULT_BASE = 'https://api.usepylon.com';
-
-    const cfg = loadConfig();
-
     const DEFAULT_AI_MODEL = 'claude-sonnet-4-6';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
       "Keep my intent and voice, but make the message clearer, friendlier, and more professional. " +
       "Do not invent facts about the product or commit to anything I haven't said. " +
       "Return ONLY the refined reply body — no preamble, no sign-off unless mine had one, and no quoted ticket history.";
+
+    const cfg = loadConfig();
 
     function loadConfig() {
       try {
