@@ -861,8 +861,40 @@
       background: color-mix(in srgb, var(--warning) 18%, transparent);
       color: var(--warning);
     }
-    .composer-send {
+    /* AI refine button — sits between toggle row and Send. */
+    .composer-ai {
       margin-left: auto;
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--accent);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color .15s, transform .08s, color .15s;
+      position: relative;
+    }
+    .composer-ai + .composer-send { margin-left: 8px; }
+    .composer-ai:hover { background: color-mix(in srgb, var(--accent) 12%, var(--surface-2)); }
+    .composer-ai:active { transform: scale(.94); }
+    .composer-ai:disabled { opacity: .55; cursor: progress; }
+    .composer-ai .ai-spinner {
+      display: none;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: ptr-spin .7s linear infinite;
+    }
+    .composer-ai.is-loading .ai-sparkle { display: none; }
+    .composer-ai.is-loading .ai-spinner { display: block; }
+
+    .composer-send {
       min-height: 44px;
       min-width: 96px;
       padding: 0 22px;
@@ -1105,6 +1137,15 @@
       text-align: left;
     }
     .list-row + .list-row { border-top: 1px solid var(--border); }
+    .list-row-header {
+      padding: 10px 16px 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+    }
+    .list-row-header + .list-row { border-top: 1px solid var(--border); }
     .list-row:hover { background: var(--surface-2); }
     .list-row .left { color: var(--text-muted); display: flex; align-items: center; }
     .list-row .body { flex: 1; min-width: 0; }
@@ -1905,14 +1946,27 @@
 
     const cfg = loadConfig();
 
+    const DEFAULT_AI_MODEL = 'claude-sonnet-4-6';
+    const DEFAULT_AI_PROMPT =
+      "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
+      "Keep my intent and voice, but make the message clearer, friendlier, and more professional. " +
+      "Do not invent facts about the product or commit to anything I haven't said. " +
+      "Return ONLY the refined reply body — no preamble, no sign-off unless mine had one, and no quoted ticket history.";
+
     function loadConfig() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        const defaults = { apiKey: '', base: DEFAULT_BASE, proxy: '', signature: '' };
+        const defaults = {
+          apiKey: '', base: DEFAULT_BASE, proxy: '', signature: '',
+          aiApiKey: '', aiSystemPrompt: '', aiModel: DEFAULT_AI_MODEL,
+        };
         if (!raw) return defaults;
         return Object.assign(defaults, JSON.parse(raw));
       } catch {
-        return { apiKey: '', base: DEFAULT_BASE, proxy: '', signature: '' };
+        return {
+          apiKey: '', base: DEFAULT_BASE, proxy: '', signature: '',
+          aiApiKey: '', aiSystemPrompt: '', aiModel: DEFAULT_AI_MODEL,
+        };
       }
     }
     function saveConfig() {
@@ -1923,6 +1977,9 @@
       cfg.apiKey = '';
       cfg.base = DEFAULT_BASE;
       cfg.proxy = '';
+      cfg.aiApiKey = '';
+      cfg.aiSystemPrompt = '';
+      cfg.aiModel = DEFAULT_AI_MODEL;
     }
 
     // ============ API ============
@@ -2740,6 +2797,13 @@
                 <span id="threadPickerLabel">Default thread</span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6;"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
+              <button type="button" class="composer-ai" id="aiRefineBtn" title="Refine with Claude" aria-label="Refine draft with Claude">
+                <svg class="ai-sparkle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3l1.8 4.5L18 9l-4.2 1.5L12 15l-1.8-4.5L6 9l4.2-1.5L12 3z"/>
+                  <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z"/>
+                </svg>
+                <span class="ai-spinner" aria-hidden="true"></span>
+              </button>
               <button type="button" class="composer-send" id="sendReply" disabled aria-label="Send reply">
                 <span id="sendLabel">Send</span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -2775,6 +2839,8 @@
       const $composerHeaderTitle = document.getElementById('composerHeaderTitle');
       const $editor = document.getElementById('replyEditor');
       const $send = document.getElementById('sendReply');
+      const $aiRefine = document.getElementById('aiRefineBtn');
+      if ($aiRefine) $aiRefine.addEventListener('click', refineDraftWithAi);
       const $toggle = document.getElementById('internalToggle');
       const $check = document.getElementById('internalCheck');
       const $internalLabel = document.getElementById('internalLabel');
@@ -3286,6 +3352,25 @@
           </div>
 
           <div class="list-card">
+            <div class="list-row-header">AI assist (Claude)</div>
+            <button class="list-row" id="editAiKey">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
+              <span class="body"><span class="l1">Anthropic API key</span><span class="l2">${escapeHtml(cfg.aiApiKey ? cfg.aiApiKey.slice(0, 8) + '••••••' + cfg.aiApiKey.slice(-4) : 'Not set — get one at console.anthropic.com')}</span></span>
+              <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+            <button class="list-row" id="editAiPrompt">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+              <span class="body"><span class="l1">System prompt</span><span class="l2">${escapeHtml((cfg.aiSystemPrompt || DEFAULT_AI_PROMPT).slice(0, 60) + ((cfg.aiSystemPrompt || DEFAULT_AI_PROMPT).length > 60 ? '…' : ''))}</span></span>
+              <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+            <button class="list-row" id="editAiModel">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/></svg></span>
+              <span class="body"><span class="l1">Model</span><span class="l2">${escapeHtml(cfg.aiModel || DEFAULT_AI_MODEL)}</span></span>
+              <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+          </div>
+
+          <div class="list-card">
             <button class="list-row" id="viewNetLog">
               <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></span>
               <span class="body"><span class="l1">Network log</span><span class="l2">${netLog.length} recent API call${netLog.length === 1 ? '' : 's'}</span></span>
@@ -3308,6 +3393,9 @@
       document.getElementById('editBase').addEventListener('click', () => promptAndSave('API base URL', cfg.base, (v) => { cfg.base = v || DEFAULT_BASE; saveConfig(); toast('Base URL updated', 'success'); render(); }));
       document.getElementById('editProxy').addEventListener('click', () => promptAndSave('CORS proxy URL (leave blank for direct)', cfg.proxy || '', (v) => { cfg.proxy = v.trim(); saveConfig(); toast(cfg.proxy ? 'Proxy enabled' : 'Proxy cleared', 'success'); render(); }));
       document.getElementById('editSignature').addEventListener('click', () => { state.view = 'signature'; render(); });
+      document.getElementById('editAiKey').addEventListener('click', () => promptAndSave('Anthropic API key (sk-ant-...)', '', (v) => { cfg.aiApiKey = v.trim(); saveConfig(); toast(cfg.aiApiKey ? 'AI key saved' : 'AI key cleared', 'success'); render(); }));
+      document.getElementById('editAiPrompt').addEventListener('click', () => promptAndSave('System prompt (multi-line OK; leave blank for default)', cfg.aiSystemPrompt || '', (v) => { cfg.aiSystemPrompt = v.trim(); saveConfig(); toast(cfg.aiSystemPrompt ? 'System prompt saved' : 'Using default prompt', 'success'); render(); }));
+      document.getElementById('editAiModel').addEventListener('click', () => promptAndSave('Claude model (e.g. claude-sonnet-4-6, claude-opus-4-6, claude-haiku-4-5)', cfg.aiModel || DEFAULT_AI_MODEL, (v) => { cfg.aiModel = v.trim() || DEFAULT_AI_MODEL; saveConfig(); toast('Model saved: ' + cfg.aiModel, 'success'); render(); }));
       document.getElementById('viewNetLog').addEventListener('click', () => { state.view = 'netlog'; render(); });
       document.getElementById('signOut').addEventListener('click', () => {
         if (!confirm('Sign out and forget your API key on this device?')) return;
@@ -4242,6 +4330,123 @@
         // Focus the cancel button by default so accidental Enter doesn't delete.
         setTimeout(function () { cancelBtn.focus(); }, 50);
       });
+    }
+
+    // ============ AI assist (Claude) ============
+    // Strip HTML from a message body into plain text for sending to Claude.
+    function htmlToPlainText(html) {
+      try {
+        const d = document.createElement('div');
+        d.innerHTML = String(html || '');
+        // Replace block elements with line breaks for legibility
+        d.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+        d.querySelectorAll('p, div, li').forEach(el => {
+          if (!el.textContent.endsWith('\n')) el.appendChild(document.createTextNode('\n'));
+        });
+        return (d.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+      } catch { return String(html || ''); }
+    }
+
+    // Build the system prompt: configured prompt (or default) + ticket context.
+    function buildAiSystemPrompt(issue, recentMsgs) {
+      const base = (cfg.aiSystemPrompt && cfg.aiSystemPrompt.trim()) || DEFAULT_AI_PROMPT;
+      const parts = [base, ''];
+      if (issue) {
+        parts.push('TICKET CONTEXT');
+        if (issue.number != null) parts.push('Number: #' + issue.number);
+        const title = issue.title || issue.subject || '';
+        if (title) parts.push('Subject: ' + title);
+        const acct = (issue.account && (issue.account.name || issue.account.title)) || '';
+        if (acct) parts.push('Account: ' + acct);
+        const req = (issue.requester && (issue.requester.name || issue.requester.email)) || '';
+        if (req) parts.push('Requester: ' + req);
+        parts.push('');
+      }
+      if (recentMsgs && recentMsgs.length) {
+        parts.push('RECENT MESSAGES (oldest to newest)');
+        for (const m of recentMsgs) {
+          const isCustomer = m.from_customer === true || m.author_type === 'contact';
+          const who = isCustomer ? 'Customer' : 'Agent';
+          const name = (m.author && (m.author.name || m.author.email)) || m.author_name || '';
+          const text = htmlToPlainText(m.body_html ?? m.html_body ?? m.message_html ?? m.body_text ?? m.body ?? '');
+          if (!text) continue;
+          parts.push('--- ' + who + (name ? ' (' + name + ')' : '') + ' ---');
+          parts.push(text);
+          parts.push('');
+        }
+      }
+      return parts.join('\n');
+    }
+
+    // POST to Anthropic Messages API. Returns the assistant's text. Throws on
+    // any non-200, surfacing the API's own error verbatim.
+    async function callClaude({ system, userMessage, model, maxTokens }) {
+      if (!cfg.aiApiKey) throw new Error('No Anthropic API key set. Add one in Settings → AI assist.');
+      const body = {
+        model: model || cfg.aiModel || DEFAULT_AI_MODEL,
+        max_tokens: maxTokens || 2048,
+        system: system,
+        messages: [{ role: 'user', content: userMessage }],
+      };
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': cfg.aiApiKey,
+          'anthropic-version': '2023-06-01',
+          // Required to call the API directly from a browser. Acceptable here
+          // because the key is stored only on the user's own device.
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify(body),
+      });
+      const text = await resp.text();
+      let data = null;
+      try { data = JSON.parse(text); } catch {}
+      if (!resp.ok) {
+        const apiErr = data && (data.error && (data.error.message || data.error.type)) || text;
+        throw new Error('Claude API ' + resp.status + ': ' + apiErr);
+      }
+      // Extract text from content blocks
+      const out = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
+      if (!out) throw new Error('Claude returned an empty response');
+      return out;
+    }
+
+    // The whole flow: take the editor's current draft, build context from the
+    // last 5 thread messages + ticket info, send to Claude, replace the editor
+    // content with the refined reply.
+    async function refineDraftWithAi() {
+      const editor = document.getElementById('replyEditor');
+      if (!editor) return;
+      const draft = (editor.textContent || '').trim();
+      if (!draft) { toast('Write a draft first, then tap ✨', 'error'); return; }
+      if (!cfg.aiApiKey) { toast('Add your Anthropic API key in Settings → AI assist', 'error'); return; }
+
+      const btn = document.getElementById('aiRefineBtn');
+      if (btn) { btn.disabled = true; btn.classList.add('is-loading'); }
+      try {
+        const recent = Array.isArray(state.messages) ? state.messages.slice(-5) : [];
+        const system = buildAiSystemPrompt(state.issue, recent);
+        const userMessage = 'Here is my draft reply. Please refine it according to the system instructions.\n\n--- DRAFT ---\n' + draft + '\n--- END DRAFT ---';
+        const refined = await callClaude({ system, userMessage });
+        // Replace editor content. Convert plain text back to simple HTML so
+        // the contenteditable shows line breaks.
+        editor.innerHTML = '';
+        const lines = refined.split(/\n/);
+        lines.forEach((line, i) => {
+          if (i > 0) editor.appendChild(document.createElement('br'));
+          editor.appendChild(document.createTextNode(line));
+        });
+        // Trigger any input listeners (e.g. send-button-enabled state)
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        toast('Refined with Claude', 'success');
+        if (window.__buzz) window.__buzz(10);
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.classList.remove('is-loading'); }
+      }
     }
 
     // Delete the currently-open issue after a confirmation step.
