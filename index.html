@@ -171,8 +171,8 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    /* Small inline copy button shown next to the ticket # in the header on detail view. */
-    .hdr-copy-btn {
+    /* Small inline action buttons shown next to the ticket # in the header on detail view. */
+    .hdr-copy-btn, .hdr-more-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -188,17 +188,133 @@
       cursor: pointer;
       transition: background-color .15s, color .15s, transform .12s;
     }
-    .hdr-copy-btn:hover, .hdr-copy-btn:focus-visible {
+    .hdr-copy-btn:hover, .hdr-copy-btn:focus-visible,
+    .hdr-more-btn:hover, .hdr-more-btn:focus-visible {
       background: var(--surface);
       color: var(--accent);
     }
-    .hdr-copy-btn:active { transform: scale(.92); background: var(--border); }
-    .hdr-copy-btn svg { display: block; }
+    .hdr-copy-btn:active, .hdr-more-btn:active { transform: scale(.92); background: var(--border); }
+    .hdr-copy-btn svg, .hdr-more-btn svg { display: block; }
     .hdr-copy-btn.is-copied {
       color: var(--success);
       border-color: color-mix(in srgb, var(--success) 40%, var(--border));
       background: color-mix(in srgb, var(--success) 12%, var(--surface-2));
     }
+
+    /* Popover menu — anchored to a header button. */
+    .popover-menu-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+    }
+    .popover-menu {
+      position: fixed;
+      z-index: 100;
+      min-width: 200px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, .35);
+      padding: 6px;
+      animation: popover-in .12s ease-out;
+    }
+    @keyframes popover-in {
+      from { opacity: 0; transform: translateY(-4px) scale(.98); }
+      to   { opacity: 1; transform: translateY(0)   scale(1); }
+    }
+    .popover-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 12px;
+      border: none;
+      background: none;
+      border-radius: 8px;
+      font: inherit;
+      font-size: 14.5px;
+      font-weight: 500;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+      transition: background-color .12s;
+    }
+    .popover-menu-item:hover, .popover-menu-item:focus-visible {
+      background: var(--surface-2);
+    }
+    .popover-menu-item.danger { color: var(--danger); }
+    .popover-menu-item.danger:hover {
+      background: color-mix(in srgb, var(--danger) 10%, var(--surface-2));
+    }
+
+    /* Confirmation modal — used for destructive actions. */
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .55);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      opacity: 0;
+      transition: opacity .15s ease;
+    }
+    .confirm-overlay.is-open { opacity: 1; }
+    .confirm-modal {
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 340px;
+      padding: 22px 22px 18px;
+      box-shadow: 0 18px 56px rgba(0, 0, 0, .35);
+      text-align: center;
+      transform: scale(.95);
+      transition: transform .15s ease;
+    }
+    .confirm-overlay.is-open .confirm-modal { transform: scale(1); }
+    .confirm-modal h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin: 0 0 8px;
+      color: var(--text);
+    }
+    .confirm-modal p {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin: 0 0 18px;
+      line-height: 1.45;
+    }
+    .confirm-actions {
+      display: flex;
+      gap: 10px;
+    }
+    .confirm-actions button {
+      flex: 1;
+      padding: 12px 14px;
+      border: none;
+      border-radius: 10px;
+      font: inherit;
+      font-size: 14.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color .12s, transform .1s;
+    }
+    .confirm-actions button:active { transform: scale(.98); }
+    .confirm-cancel {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .confirm-cancel:hover { background: var(--border); }
+    .confirm-danger {
+      background: var(--danger);
+      color: #fff;
+    }
+    .confirm-danger:hover { background: color-mix(in srgb, var(--danger) 88%, #000); }
+    .confirm-danger:disabled { opacity: .6; cursor: not-allowed; }
     .icon-btn {
       width: var(--tap);
       height: var(--tap);
@@ -1857,6 +1973,7 @@
       reply: (id, payload) => api('POST', `/issues/${encodeURIComponent(id)}/messages`, { body: payload }),
       replyAlt: (id, payload) => api('POST', '/messages', { body: Object.assign({ issue_id: id }, payload) }),
       updateIssue: (id, body) => api('PATCH', `/issues/${encodeURIComponent(id)}`, { body }),
+      deleteIssue: (id) => api('DELETE', `/issues/${encodeURIComponent(id)}`),
       listUsers: () => api('GET', '/users'),
       listContacts: () => api('GET', '/contacts'),
       getContact: (id) => api('GET', `/contacts/${encodeURIComponent(id)}`),
@@ -2095,9 +2212,23 @@
                 '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>' +
                 '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>' +
                 '</svg></button>'
-              : '');
+              : '') +
+            '<button type="button" class="hdr-more-btn" id="hdrMoreBtn"' +
+            ' aria-label="More actions" title="More actions">' +
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none"' +
+            ' stroke="currentColor" stroke-width="2.4" stroke-linecap="round"' +
+            ' stroke-linejoin="round">' +
+            '<circle cx="12" cy="5" r="1"/>' +
+            '<circle cx="12" cy="12" r="1"/>' +
+            '<circle cx="12" cy="19" r="1"/>' +
+            '</svg></button>';
           const copyBtn = document.getElementById('hdrCopyBtn');
           if (copyBtn) copyBtn.addEventListener('click', copyIssueUrl);
+          const moreBtn = document.getElementById('hdrMoreBtn');
+          if (moreBtn) moreBtn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            openIssueMoreMenu(moreBtn);
+          });
         } else {
           hdrTitle.textContent = 'Issue';
         }
@@ -3425,7 +3556,17 @@
         state.error = friendlyError(e);
       } finally {
         state.loading = false;
-        if (state.view === 'detail') renderDetail();
+        if (state.view === 'detail') {
+          // Silent refreshes (background poll, foreground-resume, pull-to-refresh)
+          // must NOT re-render while the user is mid-reply, or the renderDetail()
+          // call wipes the contenteditable and closes the composer.
+          if (silent && isComposingActively()) {
+            // Skip — fresh data is already in state and will surface on the
+            // user's next manual interaction (send, navigate, etc.).
+          } else {
+            renderDetail();
+          }
+        }
       }
     }
 
@@ -3949,6 +4090,21 @@
       return msg;
     }
 
+    // True when the user appears to be actively writing a reply: the editor
+    // is focused, or it contains real (non-empty) content. Used to suppress
+    // silent re-renders that would otherwise wipe the contenteditable.
+    function isComposingActively() {
+      const editor = document.getElementById('replyEditor');
+      if (!editor) return false;
+      if (document.activeElement === editor) return true;
+      const html = (editor.innerHTML || '').trim();
+      // Treat browser-inserted empty markers as "no content"
+      if (!html) return false;
+      if (html === '<br>' || html === '<br/>' || html === '<div><br></div>') return false;
+      const text = (editor.textContent || '').replace(/[\s​]+/g, '');
+      return text.length > 0;
+    }
+
     // Copy the current issue's Pylon web URL to the clipboard. Triggered by the
     // small copy button next to the # number in the detail-view header.
     async function copyIssueUrl(e) {
@@ -3992,6 +4148,119 @@
         }
       } else {
         toast('Copy failed — ' + url, 'error');
+      }
+    }
+
+    // ============ Issue overflow menu (delete, etc) ============
+    function openIssueMoreMenu(anchorBtn) {
+      closeIssueMoreMenu();
+      const menu = document.createElement('div');
+      menu.className = 'popover-menu';
+      menu.setAttribute('role', 'menu');
+      menu.innerHTML =
+        '<button type="button" class="popover-menu-item danger" role="menuitem" data-action="delete">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<polyline points="3 6 5 6 21 6"/>' +
+        '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>' +
+        '<path d="M10 11v6M14 11v6"/>' +
+        '<path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>' +
+        '</svg><span>Delete ticket</span></button>';
+
+      // Position fixed, anchored to bottom-right of the trigger button
+      const r = anchorBtn.getBoundingClientRect();
+      menu.style.top = (r.bottom + 8) + 'px';
+      menu.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+
+      const backdrop = document.createElement('div');
+      backdrop.className = 'popover-menu-backdrop';
+      backdrop.addEventListener('click', closeIssueMoreMenu);
+      document.body.appendChild(backdrop);
+      document.body.appendChild(menu);
+
+      menu.querySelector('[data-action="delete"]').addEventListener('click', function () {
+        closeIssueMoreMenu();
+        deleteCurrentIssue();
+      });
+
+      // Escape closes
+      document.addEventListener('keydown', onMoreMenuKey);
+    }
+    function closeIssueMoreMenu() {
+      document.querySelectorAll('.popover-menu, .popover-menu-backdrop').forEach(function (el) {
+        el.remove();
+      });
+      document.removeEventListener('keydown', onMoreMenuKey);
+    }
+    function onMoreMenuKey(e) { if (e.key === 'Escape') closeIssueMoreMenu(); }
+
+    // Generic confirm dialog — returns a Promise<boolean>.
+    function confirmAction(opts) {
+      opts = opts || {};
+      return new Promise(function (resolve) {
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-overlay';
+        overlay.innerHTML =
+          '<div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">' +
+            '<h3 id="confirmTitle">' + escapeHtml(opts.title || 'Are you sure?') + '</h3>' +
+            (opts.message ? '<p>' + escapeHtml(opts.message) + '</p>' : '') +
+            '<div class="confirm-actions">' +
+              '<button type="button" class="confirm-cancel">' + escapeHtml(opts.cancelLabel || 'Cancel') + '</button>' +
+              '<button type="button" class="' + (opts.danger ? 'confirm-danger' : 'confirm-cancel') + '">' +
+                escapeHtml(opts.confirmLabel || 'OK') +
+              '</button>' +
+            '</div>' +
+          '</div>';
+        document.body.appendChild(overlay);
+        requestAnimationFrame(function () { overlay.classList.add('is-open'); });
+
+        const cancelBtn = overlay.querySelector('.confirm-cancel');
+        const confirmBtn = overlay.querySelectorAll('button')[1];
+        function close(result) {
+          overlay.classList.remove('is-open');
+          setTimeout(function () { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 160);
+          document.removeEventListener('keydown', onKey);
+          resolve(result);
+        }
+        function onKey(e) {
+          if (e.key === 'Escape') close(false);
+          else if (e.key === 'Enter') close(true);
+        }
+        cancelBtn.addEventListener('click', function () { close(false); });
+        confirmBtn.addEventListener('click', function () { close(true); });
+        overlay.addEventListener('click', function (e) { if (e.target === overlay) close(false); });
+        document.addEventListener('keydown', onKey);
+        // Focus the cancel button by default so accidental Enter doesn't delete.
+        setTimeout(function () { cancelBtn.focus(); }, 50);
+      });
+    }
+
+    // Delete the currently-open issue after a confirmation step.
+    async function deleteCurrentIssue() {
+      const issue = state.issue;
+      if (!issue) return;
+      const id = issue.id || issue.number;
+      if (!id) return;
+      const num = issue.number != null ? issue.number : id;
+      const ok = await confirmAction({
+        title: 'Delete #' + num + '?',
+        message: 'This permanently deletes the ticket from Pylon. This cannot be undone.',
+        confirmLabel: 'Delete',
+        danger: true,
+      });
+      if (!ok) return;
+      try {
+        await Pylon.deleteIssue(id);
+        // Remove from local caches so the inbox reflects the change immediately
+        const matches = function (i) { return (i.id || i.number) === (issue.id || issue.number); };
+        if (Array.isArray(state.allIssues)) state.allIssues = state.allIssues.filter(function (i) { return !matches(i); });
+        if (Array.isArray(state.issues))    state.issues    = state.issues.filter(function (i) { return !matches(i); });
+        state.issue = null;
+        state.messages = [];
+        toast('Ticket #' + num + ' deleted', 'success');
+        if (window.__buzz) window.__buzz(15);
+        navigate('list');
+      } catch (e) {
+        toast('Delete failed: ' + friendlyError(e), 'error');
       }
     }
 
@@ -4344,6 +4613,9 @@
       // Allow refresh only on views that have data to refresh
       function canRefresh() {
         if (refreshing) return false;
+        // Don't refresh while the user is mid-reply — silent refresh would wipe
+        // their typed content.
+        if (typeof isComposingActively === 'function' && isComposingActively()) return false;
         return state.view === 'list' ||
                (state.view === 'detail' && state.issue && state.issue.id);
       }
@@ -4426,6 +4698,10 @@
           if (document.visibilityState !== 'visible') return;
           if (refreshing) return;
           if (!cfg.apiKey) return;
+          // Never poll while the user is mid-reply — even though loadIssueDetail
+          // now skips its re-render in that case, avoiding the API call entirely
+          // is cleaner and saves rate-limit budget.
+          if (isComposingActively()) return;
           if (state.view === 'list') {
             loadIssues({ silent: true }).catch(function () {});
           } else if (state.view === 'detail' && state.issue && state.issue.id) {
@@ -4440,8 +4716,9 @@
       document.addEventListener('visibilitychange', function () {
         if (document.visibilityState === 'visible') {
           startPolling();
-          // Also fire one immediate refresh when the app returns to foreground
-          if (cfg.apiKey && !refreshing) {
+          // Also fire one immediate refresh when the app returns to foreground —
+          // but skip if the user is mid-reply.
+          if (cfg.apiKey && !refreshing && !isComposingActively()) {
             if (state.view === 'list') loadIssues({ silent: true }).catch(function () {});
             else if (state.view === 'detail' && state.issue && state.issue.id) {
               loadIssueDetail(state.issue.id, { silent: true }).catch(function () {});
