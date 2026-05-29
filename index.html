@@ -57,7 +57,7 @@
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
       --header-h: 56px;
-      --bottom-nav-h: 60px;
+      --bottom-nav-h: 50px;
       --font: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
     }
     @media (prefers-color-scheme: dark) {
@@ -333,11 +333,11 @@
       flex: 1;
       display: flex;
       flex-direction: column;
-      padding: 14px;
-      /* When the keyboard is open we want to give back the soft-bottom inset
-         the keyboard is already covering. --kb-inset is set by JS via
-         visualViewport on older iOS that ignores interactive-widget=resizes-content. */
-      padding-bottom: calc(max(var(--safe-bottom) - var(--kb-inset, 0px), 0px) + 14px);
+      padding: 12px 14px;
+      /* Bottom padding: the composer handles its own safe-area + keyboard
+         inset, so .main only needs a small breather here so message content
+         doesn't butt right up against the composer. */
+      padding-bottom: 8px;
     }
 
     /* -------- pull-to-refresh -------- */
@@ -807,18 +807,23 @@
     .msg-body div[id^="divRplyFwdMsg"] *,
     .msg-body div[id^="appendonsend"] ~ * { color: var(--text-muted) !important; }
 
-    /* Reply composer — pushes to the bottom of .main (flex column) so when there
-       are few messages it doesn't leave a big gap above the keyboard or below
-       the page. margin-top:auto is what does the pinning. */
+    /* Reply composer — pushes to the bottom of .main (flex column) and sticks
+       above the keyboard when one's open. Two sources of "keyboard height":
+         - env(keyboard-inset-height): iOS 16.1+ exposes the keyboard + Safari
+           form accessory bar height directly. This is the most accurate value
+           and includes the up/down/done bar that floats above the keyboard.
+         - --kb-inset: JS fallback computed from window.visualViewport for
+           older iOS versions that don't support env(keyboard-inset-height).
+       Take the max so whichever browser reports a value wins, and we never
+       leave a gap between the composer and whatever's covering the bottom. */
     .composer {
       margin-top: auto;
-      padding: 12px 0 calc(max(var(--safe-bottom) - var(--kb-inset, 0px), 0px) + 12px);
-      background: linear-gradient(to bottom, transparent, var(--bg) 22%);
-      /* When sticky positioning is still useful (long scrolling threads), keep
-         it as well — flex-end gives baseline placement, sticky keeps it pinned
-         while scrolling messages above. */
       position: sticky;
-      bottom: var(--kb-inset, 0px);
+      bottom: max(env(keyboard-inset-height, 0px), var(--kb-inset, 0px));
+      /* Padding-bottom: full safe-area when no keyboard, collapses to 8px when
+         the keyboard's covering the home-indicator area anyway. */
+      padding: 10px 0 calc(8px + max(env(safe-area-inset-bottom, 0px) - var(--kb-inset, 0px), 0px));
+      background: linear-gradient(to bottom, transparent, var(--bg) 22%);
     }
     .composer-card {
       background: var(--surface);
@@ -1176,13 +1181,17 @@
       -webkit-user-select: text;
     }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    /* Only enable clicks on the toast while it's actually visible. Without
+       this, the invisible-but-still-in-DOM error toast (which is 92vw wide
+       and sits right over the bottom-nav) intercepted taps on the Search
+       and Me tabs after the user dismissed it. */
+    .toast.error.show { pointer-events: auto; }
     .toast.error {
       background: var(--danger);
       color: white;
       max-width: 92vw;
       width: 92vw;
       padding: 14px 18px 14px 18px;
-      pointer-events: auto;
       border-radius: 14px;
       text-align: left;
       white-space: pre-wrap;
@@ -1416,7 +1425,8 @@
       display: flex;
       max-width: 720px;
       margin: 0 auto;
-      padding: 8px 6px calc(var(--safe-bottom) + 8px);
+      /* Tight padding: 4px above the buttons, just the safe-area inset below. */
+      padding: 4px 6px max(var(--safe-bottom), 4px);
       background: color-mix(in srgb, var(--surface) 92%, transparent);
       backdrop-filter: saturate(180%) blur(18px);
       -webkit-backdrop-filter: saturate(180%) blur(18px);
@@ -1427,10 +1437,10 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 2px;
-      padding: 6px 4px;
+      gap: 1px;
+      padding: 4px 4px;
       color: var(--text-faint);
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 500;
       cursor: pointer;
       transition: color .15s, transform .04s;
