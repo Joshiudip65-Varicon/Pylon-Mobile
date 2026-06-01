@@ -820,10 +820,13 @@
       margin-top: auto;
       position: sticky;
       bottom: max(env(keyboard-inset-height, 0px), var(--kb-inset, 0px));
-      /* Padding-bottom: when no keyboard, just enough for the home indicator
-         (capped at 18pt; newer iPhones overshoot safe-area-inset-bottom).
-         When kb is up, collapses to 6px since the kb covers that area. */
-      padding: 6px 0 calc(6px + max(min(env(safe-area-inset-bottom, 0px), 18px) - var(--kb-inset, 0px), 0px));
+      /* Same standalone-PWA fix as .bottom-nav: extend the composer through
+         the safe-area-inset-bottom region when no keyboard is up, so there's
+         no dead band of body background below the Send row. When the keyboard
+         is up the sticky-bottom math already places us above it; the safe
+         area is 0 in that case (kb covers it). */
+      transform: translateY(env(safe-area-inset-bottom, 0px));
+      padding: 6px 0 calc(env(safe-area-inset-bottom, 0px) + 6px);
       background: linear-gradient(to bottom, transparent, var(--bg) 22%);
     }
     .composer-card {
@@ -1426,10 +1429,17 @@
       display: flex;
       max-width: 720px;
       margin: 0 auto;
-      /* Tight padding. Cap safe-bottom at 18pt — newer iPhones (17 etc.) report
-         a larger safe-area-inset-bottom than older models, which used to push
-         the nav buttons way above the home indicator and leave dead space. */
-      padding: 2px 6px max(min(var(--safe-bottom), 18px), 4px);
+      /* In standalone PWA mode, `bottom: 0` anchors to the TOP of the
+         safe-area-inset-bottom (not the actual screen edge), so the home-
+         indicator region below ends up as a dead band of body background.
+         In Safari that band is hidden under the URL bar, which is why the
+         user sees it only in the installed app. Fix: pull the nav's bottom
+         edge DOWN past bottom: 0 by translating it the safe-inset amount,
+         then add equal padding-bottom so the buttons stay above the home
+         indicator. Net effect: nav background extends all the way to the
+         physical screen edge in standalone mode AND in Safari. */
+      transform: translateY(env(safe-area-inset-bottom, 0px));
+      padding: 2px 6px calc(env(safe-area-inset-bottom, 0px) + 6px);
       background: color-mix(in srgb, var(--surface) 92%, transparent);
       backdrop-filter: saturate(180%) blur(18px);
       -webkit-backdrop-filter: saturate(180%) blur(18px);
