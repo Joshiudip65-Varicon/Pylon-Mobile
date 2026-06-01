@@ -542,14 +542,14 @@
 
     /* -------- detail view -------- */
     .detail-header {
-      padding: 4px 2px 14px;
+      padding: 2px 2px 10px;
     }
     .detail-title {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 700;
       letter-spacing: -.02em;
-      line-height: 1.25;
-      margin: 4px 0 10px;
+      line-height: 1.2;
+      margin: 2px 0 6px;
     }
     .detail-meta {
       display: flex;
@@ -820,9 +820,10 @@
       margin-top: auto;
       position: sticky;
       bottom: max(env(keyboard-inset-height, 0px), var(--kb-inset, 0px));
-      /* Padding-bottom: full safe-area when no keyboard, collapses to 8px when
-         the keyboard's covering the home-indicator area anyway. */
-      padding: 10px 0 calc(8px + max(env(safe-area-inset-bottom, 0px) - var(--kb-inset, 0px), 0px));
+      /* Padding-bottom: when no keyboard, just enough for the home indicator
+         (capped at 18pt; newer iPhones overshoot safe-area-inset-bottom).
+         When kb is up, collapses to 6px since the kb covers that area. */
+      padding: 6px 0 calc(6px + max(min(env(safe-area-inset-bottom, 0px), 18px) - var(--kb-inset, 0px), 0px));
       background: linear-gradient(to bottom, transparent, var(--bg) 22%);
     }
     .composer-card {
@@ -993,10 +994,10 @@
 
     /* ============ Recipients (To/Cc/Bcc) ============ */
     .recipients-box {
-      padding: 8px 10px;
+      padding: 4px 10px 6px;
       border-bottom: 1px solid var(--border);
       background: var(--surface);
-      font-size: 13px;
+      font-size: 12px;
     }
     .rcpt-row {
       display: flex;
@@ -1086,9 +1087,9 @@
     }
     .rcpt-toggle:hover { color: var(--accent); background: var(--accent-soft); }
     .state-row-label {
-      margin-top: 14px;
-      font-size: 12px;
-      font-weight: 500;
+      margin-top: 10px;
+      font-size: 11px;
+      font-weight: 600;
       color: var(--text-faint);
       text-transform: uppercase;
       letter-spacing: .04em;
@@ -1425,8 +1426,10 @@
       display: flex;
       max-width: 720px;
       margin: 0 auto;
-      /* Tight padding: 4px above the buttons, just the safe-area inset below. */
-      padding: 4px 6px max(var(--safe-bottom), 4px);
+      /* Tight padding. Cap safe-bottom at 18pt — newer iPhones (17 etc.) report
+         a larger safe-area-inset-bottom than older models, which used to push
+         the nav buttons way above the home indicator and leave dead space. */
+      padding: 2px 6px max(min(var(--safe-bottom), 18px), 4px);
       background: color-mix(in srgb, var(--surface) 92%, transparent);
       backdrop-filter: saturate(180%) blur(18px);
       -webkit-backdrop-filter: saturate(180%) blur(18px);
@@ -1453,14 +1456,14 @@
     .editor-toolbar {
       display: flex;
       gap: 2px;
-      padding: 6px;
+      padding: 3px 6px;
       border-bottom: 1px solid var(--border);
       flex-wrap: wrap;
     }
     .tbtn {
-      min-width: 32px; height: 32px;
-      padding: 0 8px;
-      border-radius: 8px;
+      min-width: 28px; height: 28px;
+      padding: 0 6px;
+      border-radius: 6px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -1482,12 +1485,12 @@
       margin: 0 3px;
     }
     .editor {
-      min-height: 80px;
-      max-height: 240px;
+      min-height: 64px;
+      max-height: 200px;
       overflow-y: auto;
-      padding: 12px;
+      padding: 10px 12px;
       font-size: 15px;
-      line-height: 1.55;
+      line-height: 1.5;
       outline: none;
       color: var(--text);
     }
@@ -1502,7 +1505,7 @@
     .editor a { color: var(--accent); text-decoration: underline; }
 
     /* Refined composer */
-    .composer { margin-top: 20px; }
+    .composer { margin-top: 8px; }
     .composer-card {
       box-shadow: var(--shadow-2);
       border-radius: var(--radius);
@@ -1511,7 +1514,7 @@
       border-color: var(--border);
     }
     .composer-actions {
-      padding: 8px 10px;
+      padding: 6px 10px;
       border-top: 1px solid var(--border);
       margin-top: 0;
     }
@@ -1527,18 +1530,18 @@
       align-items: center;
       gap: 10px;
       width: 100%;
-      padding: 12px 18px;
+      padding: 9px 16px;
       border-radius: 999px;
       background: var(--surface);
       border: 1px solid var(--border);
       box-shadow: var(--shadow-2);
       cursor: pointer;
       color: var(--text-muted);
-      font-size: 14.5px;
+      font-size: 14px;
       font-weight: 500;
       transition: background-color .15s, border-color .15s, transform .04s;
       text-align: left;
-      min-height: 48px;
+      min-height: 42px;
     }
     .composer-pill:hover {
       background: var(--surface);
@@ -1570,15 +1573,15 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 14px;
+      padding: 5px 12px;
       border-bottom: 1px solid var(--border);
       background: var(--surface);
     }
     .composer-header-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-muted);
-      letter-spacing: .02em;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text-faint);
+      letter-spacing: .06em;
       text-transform: uppercase;
     }
     .composer-close {
