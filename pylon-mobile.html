@@ -2369,14 +2369,45 @@
     const hdrRight = document.getElementById('hdrRight');
     const bottomNav = document.getElementById('bottomNav');
 
+    // Per-view scroll positions, so navigating back to the inbox after
+    // scrolling through a ticket returns the user to where they were instead
+    // of leaving them stranded at the bottom of the list.
+    const scrollPositions = { list: 0, detail: 0, settings: 0, netlog: 0, signature: 0, search: 0 };
+
+    function currentScrollY() {
+      return window.scrollY ||
+        (document.documentElement && document.documentElement.scrollTop) ||
+        (document.body && document.body.scrollTop) ||
+        0;
+    }
+    function scrollToY(y) {
+      // Try every scroller — the active one depends on body's positioning,
+      // which differs between Safari and standalone PWA modes.
+      try { window.scrollTo(0, y); } catch {}
+      try { if (document.documentElement) document.documentElement.scrollTop = y; } catch {}
+      try { if (document.body) document.body.scrollTop = y; } catch {}
+    }
+
     function navigate(view, opts = {}) {
+      // Snapshot the scroll position of the view we're leaving so it can be
+      // restored when the user comes back.
+      if (state.view) scrollPositions[state.view] = currentScrollY();
+
       state.view = view;
       state.error = null;
       if (opts.issue !== undefined) state.issue = opts.issue;
+
+      // Opening a (newly-tapped) ticket should start at the top, not at
+      // whatever scrollY the previous detail view ended at.
+      if (view === 'detail' && opts.issue) scrollPositions.detail = 0;
+
       render();
       if (view === 'list' && !state.issues.length) loadIssues();
       if (view === 'detail' && state.issue) loadIssueDetail(state.issue.id || state.issue);
-      window.scrollTo({ top: 0, behavior: 'instant' });
+
+      // Restore scroll on the next frame so the new view's DOM has rendered.
+      const targetY = scrollPositions[view] || 0;
+      requestAnimationFrame(() => scrollToY(targetY));
     }
 
     function render() {
