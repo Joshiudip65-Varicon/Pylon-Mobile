@@ -689,6 +689,121 @@
       scrollbar-width: none;
     }
     .filter-bar::-webkit-scrollbar { display: none; }
+
+    /* Single-row filter chips (Status / Assignees / Date). Horizontally
+       scrollable on narrow screens but fits all three on iPhone 13/17 widths. */
+    .filter-row {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 4px 0 8px;
+      margin-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .filter-row::-webkit-scrollbar { display: none; }
+    .filter-chip {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      white-space: nowrap;
+      min-height: 34px;
+      transition: background-color .15s, color .15s, border-color .15s;
+    }
+    .filter-chip:hover { background: var(--surface-2); }
+    .filter-chip:active { transform: scale(.98); }
+    .filter-chip.is-active {
+      background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+      border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+      color: var(--accent);
+    }
+    .filter-chip .filter-chip-value { font-weight: 600; }
+    .filter-chip .filter-chip-count {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      min-width: 18px;
+      text-align: center;
+    }
+    .filter-chip .chevron { opacity: .55; flex-shrink: 0; }
+
+    /* Filter popover sheets (Status, Assignees) — reuse confirm-overlay/modal
+       structure but with a list of selectable rows instead of buttons. */
+    .filter-sheet { max-width: 360px; text-align: left; }
+    .filter-sheet h3 {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .filter-sheet-hint {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+    .filter-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 14px;
+      max-height: 50dvh;
+      overflow-y: auto;
+    }
+    .filter-list li { padding: 0; margin: 0; }
+    .filter-row-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 11px 6px;
+      border: none;
+      background: none;
+      color: var(--text);
+      font: inherit;
+      font-size: 14.5px;
+      text-align: left;
+      cursor: pointer;
+      border-radius: 8px;
+    }
+    .filter-row-btn:hover { background: var(--surface-2); }
+    .filter-row-btn + .filter-row-btn { border-top: none; }
+    .filter-row-check {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      border: 1.5px solid var(--border-strong);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: transparent;
+      transition: background-color .12s, border-color .12s, color .12s;
+      flex-shrink: 0;
+    }
+    .filter-row-btn[aria-pressed="true"] .filter-row-check {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .filter-row-label { flex: 1; }
+    .filter-row-count {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 1px 8px;
+      border-radius: 999px;
+      background: var(--surface-2);
+    }
     .chip {
       flex: 0 0 auto;
       padding: 8px 14px;
@@ -2179,7 +2294,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v27';
+    const APP_VERSION = 'pylon-mobile-v28';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -2485,7 +2600,9 @@
       allIssues: [],   // raw from server, used for counts + assignee list
       issues: [],      // post-filter, displayed
       filter: Object.assign(
-        { state: '', assignee: 'all', q: '' },
+        // Default to status='new' so the inbox lands on the most actionable
+        // tickets first; assignees is an array for multi-select (empty = anyone).
+        { state: 'new', assignees: [], q: '' },
         defaultDateWindow()
       ),
       stateCounts: {}, // { new: 2, waiting_on_you: 18, ... }
@@ -2738,9 +2855,11 @@
           </span>
           <input id="searchInput" type="search" placeholder="Search issues, subjects, requesters…" value="${escapeAttr(state.filter.q)}" />
         </div>
-        <div class="filter-bar" id="filterBar">${renderStateChips()}</div>
-        <div class="filter-bar" id="assigneeBar" style="margin-top: -4px;">${renderAssigneeChips()}</div>
-        <div class="filter-bar" id="dateBar" style="margin-top: -4px;">${renderDateChip()}</div>
+        <div class="filter-row" id="filterRow">
+          ${renderStatusFilterChip()}
+          ${renderAssigneeFilterChip()}
+          ${renderDateChip()}
+        </div>
         <div id="listContainer">
           ${renderListBody()}
         </div>
@@ -2757,25 +2876,14 @@
         if (e.key === 'Enter') { e.preventDefault(); clearTimeout(t); reapplyFilters(); }
       });
 
-      const $filterBar = document.getElementById('filterBar');
-      $filterBar.addEventListener('click', (e) => {
-        const btn = e.target.closest('.chip');
+      const $filterRow = document.getElementById('filterRow');
+      $filterRow.addEventListener('click', (e) => {
+        const btn = e.target.closest('.filter-chip');
         if (!btn) return;
-        state.filter.state = btn.dataset.state || '';
-        reapplyFilters();
-      });
-
-      const $assigneeBar = document.getElementById('assigneeBar');
-      $assigneeBar.addEventListener('click', (e) => {
-        const btn = e.target.closest('.chip');
-        if (!btn) return;
-        state.filter.assignee = btn.dataset.assignee || 'all';
-        reapplyFilters();
-      });
-
-      const $dateBar = document.getElementById('dateBar');
-      $dateBar.addEventListener('click', (e) => {
-        if (e.target.closest('.chip')) openDatePicker();
+        const which = btn.dataset.filter;
+        if (which === 'status')   openStatusFilterSheet();
+        else if (which === 'assignee') openAssigneeFilterSheet();
+        else if (which === 'date')     openDatePicker();
       });
 
       const list = document.getElementById('listContainer');
@@ -2789,22 +2897,165 @@
       attachBodyObservers();
     }
 
-    function renderStateChips() {
+    // Status options used by both the filter chip label + the popover sheet.
+    function statusOptions() {
       const counts = state.stateCounts || {};
       const total = counts._total || 0;
-      const items = [
-        ['', 'All', total],
-        ['new', 'New', counts.new || 0],
-        ['waiting_on_you', 'On you', counts.waiting_on_you || 0],
-        ['waiting_on_customer', 'On customer', counts.waiting_on_customer || 0],
-        ['on_hold', 'On hold', counts.on_hold || 0],
-        ['closed', 'Closed', counts.closed || 0],
+      return [
+        { value: '', label: 'All', count: total },
+        { value: 'new', label: 'New', count: counts.new || 0 },
+        { value: 'waiting_on_you', label: 'On you', count: counts.waiting_on_you || 0 },
+        { value: 'waiting_on_customer', label: 'On customer', count: counts.waiting_on_customer || 0 },
+        { value: 'on_hold', label: 'On hold', count: counts.on_hold || 0 },
+        { value: 'closed', label: 'Closed', count: counts.closed || 0 },
       ];
-      return items.map(([k, label, c]) => `
-        <button class="chip" data-state="${k}" aria-pressed="${state.filter.state === k}">
-          ${escapeHtml(label)}<span class="chip-count">${c}</span>
-        </button>
-      `).join('');
+    }
+
+    function renderStatusFilterChip() {
+      const current = statusOptions().find(o => o.value === state.filter.state) || statusOptions()[0];
+      return '<button type="button" class="filter-chip" data-filter="status" id="statusFilterBtn">' +
+        '<span class="filter-chip-value">' + escapeHtml(current.label) + '</span>' +
+        '<span class="filter-chip-count">' + current.count + '</span>' +
+        '<svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
+        '</button>';
+    }
+
+    function renderAssigneeFilterChip() {
+      const me = state.me || {};
+      const sel = Array.isArray(state.filter.assignees) ? state.filter.assignees : [];
+      let label = 'Anyone';
+      if (sel.length === 1) {
+        const v = sel[0];
+        if (v === 'me') label = 'Me';
+        else if (v === 'unassigned') label = 'Unassigned';
+        else {
+          const a = (state.assigneeStats || []).find(s => s.id === v);
+          label = a ? a.name : 'Assignee';
+        }
+      } else if (sel.length > 1) {
+        const first = sel[0];
+        const head = first === 'me' ? 'Me' : first === 'unassigned' ? 'Unassigned'
+          : ((state.assigneeStats || []).find(s => s.id === first) || { name: 'Multi' }).name;
+        label = head + ' +' + (sel.length - 1);
+      }
+      return '<button type="button" class="filter-chip ' + (sel.length ? 'is-active' : '') + '"' +
+        ' data-filter="assignee" id="assigneeFilterBtn">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' +
+        '<span class="filter-chip-value">' + escapeHtml(label) + '</span>' +
+        '<svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
+        '</button>';
+    }
+
+    // Status filter popover — single-select. Tapping an option applies and closes.
+    function openStatusFilterSheet() {
+      const opts = statusOptions();
+      const overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML =
+        '<div class="confirm-modal filter-sheet" role="dialog">' +
+          '<h3>Status</h3>' +
+          '<ul class="filter-list">' +
+            opts.map(function (it) {
+              return '<li><button type="button" class="filter-row-btn" data-value="' + escapeAttr(it.value) + '"' +
+                (state.filter.state === it.value ? ' aria-pressed="true"' : '') + '>' +
+                '<span class="filter-row-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>' +
+                '<span class="filter-row-label">' + escapeHtml(it.label) + '</span>' +
+                '<span class="filter-row-count">' + it.count + '</span>' +
+              '</button></li>';
+            }).join('') +
+          '</ul>' +
+          '<div class="confirm-actions"><button type="button" class="confirm-cancel" data-action="close">Done</button></div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      requestAnimationFrame(function () { overlay.classList.add('is-open'); });
+
+      function close() {
+        overlay.classList.remove('is-open');
+        setTimeout(function () { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 160);
+        document.removeEventListener('keydown', onKey);
+      }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+
+      overlay.querySelectorAll('.filter-row-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          state.filter.state = btn.dataset.value || '';
+          reapplyFilters();
+          const chip = document.getElementById('statusFilterBtn');
+          if (chip) chip.outerHTML = renderStatusFilterChip();
+          close();
+        });
+      });
+      overlay.querySelector('[data-action="close"]').addEventListener('click', close);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+      document.addEventListener('keydown', onKey);
+    }
+
+    // Assignee filter popover — multi-select. Tapping toggles inclusion; the
+    // list updates inline. Done dismisses.
+    function openAssigneeFilterSheet() {
+      const me = state.me || {};
+      const meId = me.id || me.user_id;
+      const meName = me.name || me.email || 'Me';
+      const fixed = [
+        { id: 'me', label: meName + ' (me)', icon: 'me' },
+        { id: 'unassigned', label: 'Unassigned', icon: 'unassigned' },
+      ];
+      const dynamic = (state.assigneeStats || []).filter(s => s.id && s.id !== meId)
+        .map(s => ({ id: s.id, label: s.name + (s.count ? ' · ' + s.count : ''), icon: 'user' }));
+      const all = fixed.concat(dynamic);
+
+      const overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+
+      function rowHtml(opt) {
+        const checked = state.filter.assignees.includes(opt.id);
+        return '<li><button type="button" class="filter-row-btn" data-value="' + escapeAttr(opt.id) + '"' +
+          (checked ? ' aria-pressed="true"' : '') + '>' +
+          '<span class="filter-row-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>' +
+          '<span class="filter-row-label">' + escapeHtml(opt.label) + '</span>' +
+        '</button></li>';
+      }
+
+      overlay.innerHTML =
+        '<div class="confirm-modal filter-sheet" role="dialog">' +
+          '<h3>Assignees <span class="filter-sheet-hint">(select multiple)</span></h3>' +
+          '<ul class="filter-list" id="assigneeFilterList">' + all.map(rowHtml).join('') + '</ul>' +
+          '<div class="confirm-actions">' +
+            '<button type="button" class="confirm-cancel" data-action="clear">Clear all</button>' +
+            '<button type="button" class="confirm-danger" data-action="done" style="background: var(--accent);">Done</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      requestAnimationFrame(function () { overlay.classList.add('is-open'); });
+
+      function close() {
+        overlay.classList.remove('is-open');
+        setTimeout(function () { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 160);
+        document.removeEventListener('keydown', onKey);
+        // Apply on close so the chip + list reflect the new selection.
+        reapplyFilters();
+        const chip = document.getElementById('assigneeFilterBtn');
+        if (chip) chip.outerHTML = renderAssigneeFilterChip();
+      }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+
+      overlay.querySelector('#assigneeFilterList').addEventListener('click', function (e) {
+        const btn = e.target.closest('.filter-row-btn');
+        if (!btn) return;
+        const v = btn.dataset.value;
+        const idx = state.filter.assignees.indexOf(v);
+        if (idx >= 0) state.filter.assignees.splice(idx, 1);
+        else state.filter.assignees.push(v);
+        btn.setAttribute('aria-pressed', idx < 0 ? 'true' : 'false');
+      });
+      overlay.querySelector('[data-action="clear"]').addEventListener('click', function () {
+        state.filter.assignees = [];
+        overlay.querySelectorAll('.filter-row-btn').forEach(b => b.removeAttribute('aria-pressed'));
+      });
+      overlay.querySelector('[data-action="done"]').addEventListener('click', close);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+      document.addEventListener('keydown', onKey);
     }
 
     // Friendly label for the current date window. Recognises the in-range
@@ -2827,16 +3078,15 @@
     }
 
     function renderDateChip() {
-      return '<button class="chip chip-date" data-action="open-date-picker" aria-label="Change date range">' +
+      return '<button type="button" class="filter-chip" data-filter="date" id="dateFilterBtn" aria-label="Change date range">' +
         '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '<rect x="3" y="4" width="18" height="18" rx="2"/>' +
         '<line x1="16" y1="2" x2="16" y2="6"/>' +
         '<line x1="8" y1="2" x2="8" y2="6"/>' +
         '<line x1="3" y1="10" x2="21" y2="10"/>' +
         '</svg>' +
-        '<span>' + escapeHtml(dateWindowLabel()) + '</span>' +
-        '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6;">' +
-        '<polyline points="6 9 12 15 18 9"/></svg>' +
+        '<span class="filter-chip-value">' + escapeHtml(dateWindowLabel()) + '</span>' +
+        '<svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
       '</button>';
     }
 
@@ -4015,15 +4265,15 @@
           const s = (i.state || i.status || '').toLowerCase();
           if (s !== state.filter.state) return false;
         }
-        if (!skip.has('assignee') && state.filter.assignee && state.filter.assignee !== 'all') {
+        if (!skip.has('assignee') && Array.isArray(state.filter.assignees) && state.filter.assignees.length) {
           const aId = i.assignee_id || (i.assignee && i.assignee.id) || '';
-          if (state.filter.assignee === 'me') {
-            if (!meId || aId !== meId) return false;
-          } else if (state.filter.assignee === 'unassigned') {
-            if (aId) return false;
-          } else {
-            if (aId !== state.filter.assignee) return false;
-          }
+          // Multi-select: ticket passes if its assignee matches ANY selected filter.
+          const matches = state.filter.assignees.some(filt => {
+            if (filt === 'me') return meId && aId === meId;
+            if (filt === 'unassigned') return !aId;
+            return aId === filt;
+          });
+          if (!matches) return false;
         }
         if (!skip.has('q') && state.filter.q) {
           const needle = state.filter.q.toLowerCase();
@@ -4494,11 +4744,14 @@
     function patchView() {
       if (state.view !== 'list') return;
       const container = document.getElementById('listContainer');
-      const fb = document.getElementById('filterBar');
-      const ab = document.getElementById('assigneeBar');
-      if (!container || !fb || !ab) { render(); return; }
-      fb.innerHTML = renderStateChips();
-      ab.innerHTML = renderAssigneeChips();
+      const row = document.getElementById('filterRow');
+      if (!container || !row) { render(); return; }
+      // Re-render filter chips so counts (status chip especially) stay fresh
+      // when issues load in the background.
+      row.innerHTML =
+        renderStatusFilterChip() +
+        renderAssigneeFilterChip() +
+        renderDateChip();
       container.innerHTML = renderListBody();
       const retry = document.getElementById('retryBtn');
       if (retry) retry.addEventListener('click', loadIssues);
