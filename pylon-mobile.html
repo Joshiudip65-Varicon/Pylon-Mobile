@@ -113,8 +113,22 @@
       -webkit-text-size-adjust: 100%;
     }
     /* Prevent iOS rubberband when in standalone PWA mode */
-    html.is-standalone, html.is-standalone body { position: fixed; inset: 0; overflow: hidden; }
-    html.is-standalone body { height: 100%; overflow-y: auto; }
+    /* Standalone PWA mode: keep iOS from rubber-banding past the top/bottom,
+       but DON'T use the old 'position: fixed; inset: 0' trick. That trick
+       turned body into the containing block for fixed descendants, which on
+       iPhone 17 ends up shorter than the actual screen and floats the bottom-
+       nav and composer above the home indicator area. overscroll-behavior
+       gives us the anti-rubber-band effect without messing with positioning. */
+    html.is-standalone {
+      overscroll-behavior-y: contain;
+      height: 100%;
+    }
+    html.is-standalone body {
+      overscroll-behavior-y: contain;
+      min-height: 100dvh;
+      /* Allow native scrolling — position: fixed children now anchor to the
+         layout viewport (= the full screen) instead of body's shorter box. */
+    }
     button, input, textarea, select { font: inherit; color: inherit; }
     button { background: none; border: none; padding: 0; cursor: pointer; }
     input, textarea {
