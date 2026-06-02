@@ -894,12 +894,17 @@
       margin-top: auto;
       position: sticky;
       bottom: max(env(keyboard-inset-height, 0px), var(--kb-inset, 0px));
-      /* Padding-bottom: when no keyboard is up, lift the pill above the
-         home-indicator area so it isn't clipped. env(safe-area-inset-bottom)
-         goes to 0 when the keyboard's shown (kb covers that region), so the
-         padding collapses to 6px and the composer rides right above the kb. */
-      padding: 6px 0 max(env(safe-area-inset-bottom, 0px), 6px);
-      background: linear-gradient(to bottom, transparent, var(--bg) 22%);
+      /* Padding-bottom: needs to lift the pill above the iOS home indicator.
+         env(safe-area-inset-bottom) returns 0 in iPhone 17 standalone PWA
+         (a known WebKit quirk) so we can't rely on it alone. Floor with a
+         hard 30pt minimum, subtracting --kb-inset so it collapses cleanly
+         when the keyboard is up. */
+      padding: 6px 14px max(
+        env(safe-area-inset-bottom, 0px),
+        calc(30px - var(--kb-inset, 0px)),
+        6px
+      );
+      background: var(--bg);
     }
     .composer-card {
       background: var(--surface);
@@ -1501,10 +1506,10 @@
       display: flex;
       max-width: 720px;
       margin: 0 auto;
-      /* Minimal padding — buttons sit right at the bottom. The body::after
-         filler below paints the safe-area region in the same surface colour
-         so the two visually merge into one continuous bar with no gap. */
-      padding: 2px 6px 4px;
+      /* Same hard floor as the composer — env(safe-area-inset-bottom) returns
+         0 in iPhone 17 standalone PWA, so we need a 28pt minimum to keep the
+         labels clear of the home indicator gesture line. */
+      padding: 2px 6px max(env(safe-area-inset-bottom, 0px), 28px);
       background: color-mix(in srgb, var(--surface) 92%, transparent);
       backdrop-filter: saturate(180%) blur(18px);
       -webkit-backdrop-filter: saturate(180%) blur(18px);
@@ -2048,7 +2053,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v25';
+    const APP_VERSION = 'pylon-mobile-v26';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
