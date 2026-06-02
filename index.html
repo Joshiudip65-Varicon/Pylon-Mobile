@@ -671,6 +671,7 @@
     }
     .search input {
       padding-left: 40px;
+      padding-right: 48px;
       background: var(--surface);
     }
     .search-icon {
@@ -680,6 +681,62 @@
       color: var(--text-faint);
       pointer-events: none;
     }
+    /* AI Search sparkle button inside the search input on the right side. */
+    .search-ai-btn {
+      position: absolute;
+      right: 6px; top: 50%;
+      transform: translateY(-50%);
+      width: 36px; height: 36px;
+      padding: 0;
+      border: none;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+      color: var(--accent);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color .15s, transform .08s;
+    }
+    .search-ai-btn:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+    .search-ai-btn:active { transform: translateY(-50%) scale(.94); }
+    .search-ai-btn:disabled { opacity: .55; cursor: progress; }
+    .search-ai-btn .ai-spinner {
+      display: none;
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: ptr-spin .7s linear infinite;
+    }
+    .search-ai-btn.is-loading svg { display: none; }
+    .search-ai-btn.is-loading .ai-spinner { display: block; }
+
+    /* Banner that shows when an AI search filter is active. */
+    .ai-search-banner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      margin: -4px 0 12px;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+      font-size: 13px;
+      color: var(--text);
+    }
+    .ai-search-banner span { flex: 1; min-width: 0; }
+    .ai-search-banner strong { color: var(--accent); font-weight: 700; }
+    .ai-search-clear {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .ai-search-clear:hover { background: var(--border); color: var(--text); }
     .filter-bar {
       display: flex;
       gap: 8px;
@@ -2323,7 +2380,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v30';
+    const APP_VERSION = 'pylon-mobile-v31';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -2647,15 +2704,18 @@
       issues: [],      // post-filter, displayed
       filter: Object.assign(
         // Default to status='new' so the inbox lands on the most actionable
-        // tickets first; assignees/accounts/requesters are arrays for multi-
-        // select (empty arrays = no filter on that dimension).
-        { state: 'new', assignees: [], accounts: [], requesters: [], q: '' },
+        // tickets first; assignees/accounts are arrays for multi-select
+        // (empty arrays = no filter on that dimension).
+        { state: 'new', assignees: [], accounts: [], q: '' },
         defaultDateWindow()
       ),
+      // AI search: when set to a Set of ticket IDs/numbers, only those match.
+      // Null = no AI filter active.
+      aiSearchMatches: null,
+      aiSearchQuery: '',
       stateCounts: {}, // { new: 2, waiting_on_you: 18, ... }
       assigneeStats: [], // [{id, name, count}, ...] top assignees
       accountStats: [],  // [{id, name, count}, ...] all accounts
-      requesterStats: [], // [{id, name, email, count}, ...] all requesters
       issue: null,
       messages: [],
       loading: false,
@@ -2902,13 +2962,26 @@
           <span class="search-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </span>
-          <input id="searchInput" type="search" placeholder="Search issues, subjects, requesters…" value="${escapeAttr(state.filter.q)}" />
+          <input id="searchInput" type="search" placeholder="Search subject, account, thread text…" value="${escapeAttr(state.filter.q)}" />
+          <button type="button" class="search-ai-btn" id="aiSearchBtn" title="AI search — looks inside ticket conversations" aria-label="Search with AI">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l1.8 4.5L18 9l-4.2 1.5L12 15l-1.8-4.5L6 9l4.2-1.5L12 3z"/>
+              <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z"/>
+            </svg>
+            <span class="ai-spinner" aria-hidden="true"></span>
+          </button>
         </div>
+        ${state.aiSearchMatches ? `<div class="ai-search-banner" id="aiSearchBanner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--accent);"><path d="M12 3l1.8 4.5L18 9l-4.2 1.5L12 15l-1.8-4.5L6 9l4.2-1.5L12 3z"/></svg>
+          <span>AI found <strong>${state.aiSearchMatches.size}</strong> match${state.aiSearchMatches.size === 1 ? '' : 'es'} for &ldquo;${escapeHtml(state.aiSearchQuery)}&rdquo;</span>
+          <button type="button" class="ai-search-clear" id="aiSearchClear" aria-label="Clear AI search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>` : ''}
         <div class="filter-row" id="filterRow">
           ${renderStatusFilterChip()}
           ${renderAssigneeFilterChip()}
           ${renderAccountFilterChip()}
-          ${renderRequesterFilterChip()}
           ${renderDateChip()}
         </div>
         <div id="listContainer">
@@ -2927,6 +3000,16 @@
         if (e.key === 'Enter') { e.preventDefault(); clearTimeout(t); reapplyFilters(); }
       });
 
+      const $aiSearch = document.getElementById('aiSearchBtn');
+      if ($aiSearch) $aiSearch.addEventListener('click', runAiSearch);
+      const $aiClear = document.getElementById('aiSearchClear');
+      if ($aiClear) $aiClear.addEventListener('click', () => {
+        state.aiSearchMatches = null;
+        state.aiSearchQuery = '';
+        reapplyFilters();
+        render();
+      });
+
       const $filterRow = document.getElementById('filterRow');
       $filterRow.addEventListener('click', (e) => {
         const btn = e.target.closest('.filter-chip');
@@ -2935,7 +3018,6 @@
         if (which === 'status')         openStatusFilterSheet();
         else if (which === 'assignee')  openAssigneeFilterSheet();
         else if (which === 'account')   openAccountFilterSheet();
-        else if (which === 'requester') openRequesterFilterSheet();
         else if (which === 'date')      openDatePicker();
       });
 
@@ -4515,19 +4597,27 @@
           });
           if (!matches) return false;
         }
-        if (!skip.has('requester') && Array.isArray(state.filter.requesters) && state.filter.requesters.length) {
-          const reqId = (i.requester && i.requester.id) || (i.contact && i.contact.id) || i.requester_id || '';
-          const matches = state.filter.requesters.some(filt => reqId === filt);
-          if (!matches) return false;
+        // AI search filter — when active, only tickets in the AI's match set pass.
+        if (!skip.has('ai') && state.aiSearchMatches) {
+          const id = i.id || '';
+          const num = i.number != null ? String(i.number) : '';
+          if (!state.aiSearchMatches.has(id) && !state.aiSearchMatches.has(num)) return false;
         }
         if (!skip.has('q') && state.filter.q) {
           const needle = state.filter.q.toLowerCase();
+          const id = i.id || '';
+          // Include the body preview (lazy-loaded first-message snippet, cached
+          // per ticket) so the search input matches text *inside* the ticket,
+          // not just metadata. No extra API cost — the preview is already
+          // fetched when the card is rendered.
+          const preview = issueBodyPreviewCache[id] || '';
           const hay = [
             i.title, i.subject,
             i.requester && (i.requester.name || i.requester.email),
             i.account && i.account.name,
             assigneeNameOf(i),
             i.number, i.id,
+            preview,
           ].filter(Boolean).join(' ').toLowerCase();
           if (!hay.includes(needle)) return false;
         }
@@ -4545,7 +4635,6 @@
       // picked that option (without losing the rest of their filters).
       state.assigneeStats  = topAssignees(applyClientFilters(state.allIssues, new Set(['assignee'])));
       state.accountStats   = topAccounts(applyClientFilters(state.allIssues, new Set(['account'])));
-      state.requesterStats = topRequesters(applyClientFilters(state.allIssues, new Set(['requester'])));
       patchView();
     }
 
@@ -5049,7 +5138,6 @@
         renderStatusFilterChip() +
         renderAssigneeFilterChip() +
         renderAccountFilterChip() +
-        renderRequesterFilterChip() +
         renderDateChip();
       container.innerHTML = renderListBody();
       const retry = document.getElementById('retryBtn');
@@ -5472,6 +5560,131 @@
         toast(e.message || String(e), 'error');
       } finally {
         if (btn) { btn.disabled = false; btn.classList.remove('is-loading'); }
+      }
+    }
+
+    // ============ AI Search ============
+    // Deep search across ticket conversations. Builds candidate list from the
+    // current local filter (subject/account/preview matches), fetches each
+    // candidate's messages, sends the bundle to Groq with the user's query,
+    // and filters the inbox to whatever ticket numbers the model returns.
+    async function runAiSearch() {
+      if (!cfg.aiApiKey) {
+        toast('Add your Groq API key in Settings → AI assist', 'error');
+        return;
+      }
+      const query = (state.filter.q || '').trim();
+      if (!query) {
+        toast('Type something in the search box first', 'error');
+        return;
+      }
+
+      // Cap candidates so we don't fire dozens of API calls. We pick the most
+      // recent issues (within the active filters) as the search space.
+      const MAX_CANDIDATES = 30;
+      // Snapshot current local matches WITHOUT the AI filter so we can replace it.
+      const wasAi = state.aiSearchMatches;
+      state.aiSearchMatches = null;
+      const localMatches = applyClientFilters(state.allIssues);
+      // Restore until we have new matches
+      state.aiSearchMatches = wasAi;
+      const candidates = localMatches.slice(0, MAX_CANDIDATES);
+
+      if (!candidates.length) {
+        toast('No tickets match your filters to search', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('aiSearchBtn');
+      if (btn) { btn.disabled = true; btn.classList.add('is-loading'); }
+      toast('AI searching ' + candidates.length + ' ticket' + (candidates.length === 1 ? '' : 's') + '…', 'success');
+
+      // Fetch messages for each candidate with bounded concurrency so we
+      // don't blow through Pylon's rate limits.
+      const CONCURRENCY = 5;
+      const threads = new Array(candidates.length).fill(null);
+      let next = 0;
+      async function worker() {
+        while (true) {
+          const idx = next++;
+          if (idx >= candidates.length) return;
+          const issue = candidates[idx];
+          const id = issue.id || issue.number;
+          try {
+            const resp = await Pylon.listMessages(id).catch(() => null);
+            const msgs = extractList(resp) || [];
+            threads[idx] = msgs;
+          } catch { threads[idx] = []; }
+        }
+      }
+      const workers = [];
+      for (let w = 0; w < Math.min(CONCURRENCY, candidates.length); w++) workers.push(worker());
+
+      try {
+        await Promise.all(workers);
+
+        // Build the prompt: for each candidate, emit a structured block with
+        // metadata + the full thread text. Keep each message tight so the
+        // payload stays under model context limits.
+        const blocks = candidates.map(function (issue, idx) {
+          const num = issue.number != null ? issue.number : (issue.id || '?');
+          const title = issue.title || issue.subject || '';
+          const acct = (issue.account && (issue.account.name || issue.account.title)) || resolveAccountName(issue) || '';
+          const req = (issue.requester && (issue.requester.name || issue.requester.email)) || '';
+          const msgs = threads[idx] || [];
+          // Cap each thread to last 20 messages, each message to ~500 chars,
+          // to keep the prompt bounded.
+          const recent = msgs.slice(-20);
+          const lines = recent.map(function (m) {
+            const isCustomer = m.from_customer === true || m.author_type === 'contact';
+            const who = isCustomer ? 'Customer' : 'Agent';
+            const text = htmlToPlainText(m.body_html ?? m.html_body ?? m.message_html ?? m.body_text ?? m.body ?? '').slice(0, 500);
+            return who + ': ' + text;
+          }).filter(Boolean).join('\n');
+          return '#' + num + ' | ' + title +
+            (acct ? ' | Account: ' + acct : '') +
+            (req ? ' | Requester: ' + req : '') +
+            (lines ? '\n' + lines : '');
+        });
+
+        const userMessage =
+          'The user is searching their Pylon support inbox for: "' + query + '"\n\n' +
+          'Below are ' + candidates.length + ' tickets, each with their subject, account, requester, and full conversation. ' +
+          'Return ONLY the ticket numbers (digits only, one per line) that match the user\'s query — based on the meaning of the query, including any text inside the conversation. ' +
+          'If a ticket is clearly unrelated, omit it. If none match, return an empty response.\n\n' +
+          'TICKETS:\n' +
+          blocks.join('\n\n---\n\n');
+
+        const system =
+          'You are a search assistant for a customer support inbox. Read the user\'s query and the list of tickets below. ' +
+          'Return ONLY the matching ticket numbers, one per line (e.g.\n12345\n12340\n12331). ' +
+          'No preamble, no explanation, no "#" prefix, no other text. ' +
+          'Match on intent and content — synonyms, paraphrases, and references inside the conversation all count.';
+
+        const response = await callGroq({ system, userMessage, maxTokens: 200 });
+
+        // Parse: lines that contain only digits (after trimming common prefixes).
+        const matched = new Set();
+        response.split(/\r?\n/).forEach(function (line) {
+          const m = line.replace(/^#/, '').trim().match(/^\d+$/);
+          if (m) matched.add(m[0]);
+        });
+
+        if (matched.size === 0) {
+          toast('AI found no matches for that query', 'error');
+        } else {
+          state.aiSearchMatches = matched;
+          state.aiSearchQuery = query;
+          reapplyFilters();
+          render(); // re-render to show the AI banner
+          toast('AI found ' + matched.size + ' match' + (matched.size === 1 ? '' : 'es'), 'success');
+          if (window.__buzz) window.__buzz(10);
+        }
+      } catch (e) {
+        toast('AI search failed: ' + ((e && e.message) || String(e)), 'error');
+      } finally {
+        const b = document.getElementById('aiSearchBtn');
+        if (b) { b.disabled = false; b.classList.remove('is-loading'); }
       }
     }
 
