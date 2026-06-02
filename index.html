@@ -2045,6 +2045,10 @@
     // ============ Config / Storage ============
     const STORAGE_KEY = 'pylonMobile.config.v1';
     const DEFAULT_BASE = 'https://api.usepylon.com';
+    // Keep this in sync with sw.js VERSION on every release. Shown at the
+    // bottom of the Settings screen so the user can verify which build their
+    // PWA is currently running after an update.
+    const APP_VERSION = 'pylon-mobile-v25';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -3672,6 +3676,7 @@
           </div>
 
           <p class="tiny faint center">Pylon Mobile — single-file static app. Your API key never leaves this device except in requests to Pylon (or to your CORS proxy if configured).</p>
+          <p class="tiny faint center" style="margin-top: 6px;">App version: <code style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; opacity: .85;">${escapeHtml(APP_VERSION)}</code></p>
         </div>
       `;
 
