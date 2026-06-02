@@ -291,6 +291,132 @@
       transform: scale(.95);
       transition: transform .15s ease;
     }
+    /* AI Overview button — sits in the detail header below the ticket meta. */
+    .ai-overview-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 14px;
+      margin: 10px 0 4px;
+      border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+      background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+      color: var(--accent);
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color .15s, transform .08s, border-color .15s;
+    }
+    .ai-overview-btn:hover {
+      background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+      border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+    }
+    .ai-overview-btn:active { transform: scale(.99); }
+
+    /* AI Overview sheet — slides up from the bottom on tap. */
+    .ai-sheet-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .55);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 10000;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity .2s ease;
+    }
+    .ai-sheet-overlay.is-open { opacity: 1; }
+    .ai-sheet {
+      width: 100%;
+      max-width: 720px;
+      max-height: 85dvh;
+      background: var(--surface);
+      border-radius: 20px 20px 0 0;
+      border: 1px solid var(--border);
+      border-bottom: none;
+      display: flex;
+      flex-direction: column;
+      transform: translateY(100%);
+      transition: transform .25s cubic-bezier(.2, .9, .3, 1);
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, .35);
+    }
+    .ai-sheet-overlay.is-open .ai-sheet { transform: translateY(0); }
+    .ai-sheet-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ai-sheet-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .ai-sheet-close {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .ai-sheet-close:hover { background: var(--border); }
+    .ai-sheet-body {
+      overflow-y: auto;
+      padding: 16px 18px max(env(safe-area-inset-bottom, 0px), 24px);
+      -webkit-overflow-scrolling: touch;
+    }
+    .ai-sheet-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 40px 16px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .ai-sheet-error {
+      padding: 20px;
+      color: var(--danger);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .ai-sheet-content {
+      font-size: 14.5px;
+      line-height: 1.55;
+      color: var(--text);
+    }
+    .ai-sheet-content p { margin: 0 0 12px; }
+    .ai-sheet-content strong { color: var(--text); font-weight: 700; }
+    .ai-sheet-content ul {
+      list-style: none;
+      padding-left: 0;
+      margin: 6px 0 14px;
+    }
+    .ai-sheet-content li {
+      position: relative;
+      padding-left: 16px;
+      margin-bottom: 4px;
+    }
+    .ai-sheet-content li::before {
+      content: '•';
+      position: absolute;
+      left: 4px;
+      color: var(--accent);
+    }
+    .ai-sheet-content em { font-style: italic; color: var(--text-muted); }
+
     /* Date-range picker modal — wider, left-aligned. */
     .confirm-modal.date-modal { max-width: 380px; text-align: left; }
     .date-modal h3 { margin-bottom: 8px; }
@@ -2053,7 +2179,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v26';
+    const APP_VERSION = 'pylon-mobile-v27';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -3026,6 +3152,14 @@
             ${created ? `<span>${escapeHtml(formatDate(created))}</span>` : ''}
           </div>
 
+          <button type="button" class="ai-overview-btn" id="aiOverviewBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l1.8 4.5L18 9l-4.2 1.5L12 15l-1.8-4.5L6 9l4.2-1.5L12 3z"/>
+              <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z"/>
+            </svg>
+            <span>Get AI Overview</span>
+          </button>
+
           <div class="state-row-label">Change status</div>
           <div class="filter-bar" id="stateChips" style="margin-top:6px;">
             ${stateChips.map(s => `
@@ -3119,6 +3253,10 @@
           if (ns && ns !== stateStr) changeIssueState(ns);
         });
       }
+
+      // AI Overview button — runs the whole thread through Groq for a summary
+      const $aiOverview = document.getElementById('aiOverviewBtn');
+      if ($aiOverview) $aiOverview.addEventListener('click', getAiOverview);
 
       // Tags section
       bindTagsSection();
@@ -4387,8 +4525,20 @@
       if (target === 'list') navigate('list');
       else if (target === 'search') {
         navigate('list');
-        // Focus the search box after render
-        setTimeout(() => { const s = document.getElementById('searchInput'); if (s) s.focus(); }, 40);
+        // Focus synchronously inside the same task as the user tap so iOS
+        // treats it as a user gesture and pops up the soft keyboard. A
+        // setTimeout (even 0ms) breaks the gesture chain and the keyboard
+        // never appears on iPhone — only the visual focus ring shows.
+        const s = document.getElementById('searchInput');
+        if (s) {
+          s.focus({ preventScroll: true });
+          // Belt and braces — re-focus on the next frame in case render
+          // re-created the element after our initial focus call.
+          requestAnimationFrame(() => {
+            const s2 = document.getElementById('searchInput');
+            if (s2 && document.activeElement !== s2) s2.focus({ preventScroll: true });
+          });
+        }
       } else if (target === 'settings') navigate('settings');
     });
 
@@ -4771,6 +4921,151 @@
       } finally {
         if (btn) { btn.disabled = false; btn.classList.remove('is-loading'); }
       }
+    }
+
+    // AI Overview — runs the entire ticket thread through Groq and shows a
+    // structured summary in a bottom-slide sheet so the user can grok a long
+    // ticket without scrolling through every message.
+    async function getAiOverview() {
+      if (!cfg.aiApiKey) {
+        toast('Add your Groq API key in Settings → AI assist', 'error');
+        return;
+      }
+      const issue = state.issue;
+      if (!issue) return;
+      const messages = state.messages || [];
+      if (!messages.length) { toast('No messages to summarise yet', 'error'); return; }
+
+      // Build full ticket context (NOT just the last 5 like refineDraftWithAi).
+      const lines = [];
+      lines.push('Ticket: #' + (issue.number != null ? issue.number : (issue.id || '?')));
+      const title = issue.title || issue.subject;
+      if (title) lines.push('Subject: ' + title);
+      const stateStr = issue.state || issue.status;
+      if (stateStr) lines.push('Status: ' + prettyState(stateStr));
+      const acct = (issue.account && (issue.account.name || issue.account.title)) || '';
+      if (acct) lines.push('Account: ' + acct);
+      const req = (issue.requester && (issue.requester.name || issue.requester.email)) || '';
+      if (req) lines.push('Requester: ' + req);
+      if (issue.created_at) lines.push('Created: ' + formatDate(issue.created_at));
+      if (Array.isArray(issue.tags) && issue.tags.length) {
+        const tagNames = issue.tags.map(t => typeof t === 'string' ? t : (t.name || t.value || '')).filter(Boolean);
+        if (tagNames.length) lines.push('Tags: ' + tagNames.join(', '));
+      }
+      lines.push('');
+      lines.push('CONVERSATION (oldest to newest):');
+      lines.push('');
+      for (const m of messages) {
+        const isCustomer = m.from_customer === true || m.author_type === 'contact';
+        const who = isCustomer ? 'Customer' : 'Agent';
+        const name = (m.author && (m.author.name || m.author.email)) || m.author_name || '';
+        const when = m.sent_at || m.created_at || m.timestamp;
+        const text = htmlToPlainText(m.body_html ?? m.html_body ?? m.message_html ?? m.body_text ?? m.body ?? '');
+        if (!text) continue;
+        lines.push('--- ' + who + (name ? ' (' + name + ')' : '') + (when ? ' · ' + formatDateTime(when) : '') + ' ---');
+        lines.push(text);
+        lines.push('');
+      }
+
+      const system =
+        "You are reviewing a Pylon customer support ticket to give the support rep a quick overview so they can resume the conversation without reading every message. Read the entire conversation and produce a clear, structured summary using these exact section headings on their own line, followed by short content:\n\n" +
+        "**What is this ticket about?**\n" +
+        "(1-2 sentences on the core issue)\n\n" +
+        "**Current status**\n" +
+        "(what's happening right now, who's waiting on whom)\n\n" +
+        "**What's been done so far**\n" +
+        "(chronological bullets of agent actions and customer responses)\n\n" +
+        "**Next action**\n" +
+        "(what the rep should do next, or what they're waiting for)\n\n" +
+        "**Key people**\n" +
+        "(names of the customer, agents, and any internal CC'd folks)\n\n" +
+        "**Open questions / blockers**\n" +
+        "(anything unresolved or that needs clarification — omit this section if none)\n\n" +
+        "Use - (hyphen) for bullets. Bold (**like this**) for important names or terms. No preamble, no quoting of original messages, no fluff.";
+
+      const overlay = openAiSheet('Reading the thread…');
+      try {
+        const overview = await callGroq({ system, userMessage: lines.join('\n'), maxTokens: 1500 });
+        fillAiSheet(overlay, overview);
+      } catch (e) {
+        fillAiSheetError(overlay, (e && e.message) || String(e));
+      }
+    }
+
+    // Bottom-slide sheet used for AI Overview output. Returns the overlay
+    // element so the caller can populate it once the API response lands.
+    function openAiSheet(loadingLabel) {
+      const overlay = document.createElement('div');
+      overlay.className = 'ai-sheet-overlay';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.innerHTML =
+        '<div class="ai-sheet">' +
+          '<div class="ai-sheet-header">' +
+            '<span class="ai-sheet-title">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">' +
+                '<path d="M12 3l1.8 4.5L18 9l-4.2 1.5L12 15l-1.8-4.5L6 9l4.2-1.5L12 3z"/>' +
+                '<path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z"/>' +
+              '</svg>' +
+              '<span>Ticket Overview</span>' +
+            '</span>' +
+            '<button type="button" class="ai-sheet-close" aria-label="Close">' +
+              '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>' +
+              '</svg>' +
+            '</button>' +
+          '</div>' +
+          '<div class="ai-sheet-body">' +
+            '<div class="ai-sheet-loading"><span class="spinner"></span> ' + escapeHtml(loadingLabel) + '</div>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      requestAnimationFrame(function () { overlay.classList.add('is-open'); });
+
+      function close() {
+        overlay.classList.remove('is-open');
+        setTimeout(function () { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 220);
+        document.removeEventListener('keydown', onKey);
+      }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+      overlay.querySelector('.ai-sheet-close').addEventListener('click', close);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+      document.addEventListener('keydown', onKey);
+      return overlay;
+    }
+
+    function fillAiSheet(overlay, text) {
+      const body = overlay.querySelector('.ai-sheet-body');
+      body.innerHTML = '<div class="ai-sheet-content">' + formatAiResponse(text) + '</div>';
+    }
+    function fillAiSheetError(overlay, msg) {
+      const body = overlay.querySelector('.ai-sheet-body');
+      body.innerHTML = '<div class="ai-sheet-error">Couldn’t load overview: ' + escapeHtml(msg) + '</div>';
+    }
+
+    // Light markdown-ish renderer for AI responses. Supports **bold**, bullet
+    // lines starting with - or *, and paragraph breaks. Anything else passes
+    // through as escaped plain text.
+    function formatAiResponse(text) {
+      const escaped = escapeHtml(String(text || ''));
+      // Bold
+      let html = escaped.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+      // Single-asterisk italic (only when not adjacent to other asterisks)
+      html = html.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+      // Group consecutive bullet lines into <ul><li>...
+      const out = [];
+      const blocks = html.split(/\n{2,}/);
+      for (const block of blocks) {
+        const ls = block.split(/\n/);
+        const bulletRe = /^\s*[-•*]\s+(.+)$/;
+        if (ls.every(l => bulletRe.test(l) || !l.trim())) {
+          const items = ls.filter(l => l.trim()).map(l => '<li>' + l.replace(bulletRe, '$1') + '</li>').join('');
+          out.push('<ul>' + items + '</ul>');
+        } else {
+          out.push('<p>' + ls.join('<br>') + '</p>');
+        }
+      }
+      return out.join('');
     }
 
     // Delete the currently-open issue after a confirmation step.
