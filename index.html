@@ -2323,7 +2323,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v29';
+    const APP_VERSION = 'pylon-mobile-v30';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -2485,10 +2485,27 @@
         }
       } catch {}
       try {
-        const c = await Pylon.listContacts().catch(() => null);
-        const cs = extractList(c) || [];
-        for (const x of cs) {
-          if (x && x.id) peopleCache.contacts[x.id] = x;
+        // Paginate contacts the same way we paginate accounts. Pylon caps a
+        // single /contacts page at 100, so workspaces with many requesters
+        // would otherwise only get the first 100 cached and the rest fall
+        // back to placeholder labels in the filter picker.
+        let cursor = null;
+        let pages = 0;
+        while (pages < 30) { // up to 30 * 100 = 3,000 contacts
+          const resp = await Pylon.listContacts(cursor ? { limit: 100, cursor } : { limit: 100 }).catch(() => null);
+          if (!resp) break;
+          const cs = extractList(resp) || [];
+          for (const x of cs) {
+            if (x && x.id) peopleCache.contacts[x.id] = x;
+          }
+          const next = resp.cursor || (resp.pagination && resp.pagination.cursor) || (resp.data && resp.data.cursor) || null;
+          const hasNext = (typeof resp.has_next_page === 'boolean' ? resp.has_next_page
+                          : (resp.pagination && typeof resp.pagination.has_next_page === 'boolean' ? resp.pagination.has_next_page
+                          : (typeof (resp.data && resp.data.has_next_page) === 'boolean' ? resp.data.has_next_page
+                          : !!next)));
+          if (!hasNext || !next || cs.length === 0) break;
+          cursor = next;
+          pages++;
         }
       } catch {}
     }
@@ -3095,22 +3112,17 @@
     }
 
     // ---------- Account filter ----------
+    function accountLabelFor(id) {
+      if (id === '__none__') return 'No account';
+      const a = (state.accountStats || []).find(s => s.id === id);
+      if (a && a.name) return a.name;
+      return 'Account · ' + String(id || '').slice(-6);
+    }
     function renderAccountFilterChip() {
       const sel = Array.isArray(state.filter.accounts) ? state.filter.accounts : [];
       let label = 'All accounts';
-      if (sel.length === 1) {
-        const v = sel[0];
-        if (v === '__none__') label = 'No account';
-        else {
-          const a = (state.accountStats || []).find(s => s.id === v);
-          label = a ? (a.name || 'Account') : 'Account';
-        }
-      } else if (sel.length > 1) {
-        const first = sel[0];
-        const head = first === '__none__' ? 'No account'
-          : (((state.accountStats || []).find(s => s.id === first) || { name: 'Account' }).name || 'Account');
-        label = head + ' +' + (sel.length - 1);
-      }
+      if (sel.length === 1) label = accountLabelFor(sel[0]);
+      else if (sel.length > 1) label = accountLabelFor(sel[0]) + ' +' + (sel.length - 1);
       return '<button type="button" class="filter-chip ' + (sel.length ? 'is-active' : '') + '"' +
         ' data-filter="account" id="accountFilterBtn">' +
         '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
@@ -3126,7 +3138,17 @@
       stats.sort((a, b) => (a.id === '__none__') - (b.id === '__none__') || b.count - a.count);
       openMultiSelectFilterSheet({
         title: 'Accounts',
-        items: stats.map(s => ({ id: s.id, label: s.name || (s.id === '__none__' ? 'No account' : 'Account'), count: s.count })),
+        items: stats.map(s => {
+          let label = s.name;
+          if (!label) {
+            label = s.id === '__none__'
+              ? 'No account'
+              // Distinct fallback so empty-name entries don't all look like
+              // duplicate "Account" rows — show the last 6 chars of the ID.
+              : 'Unnamed account · ' + String(s.id).slice(-6);
+          }
+          return { id: s.id, label, count: s.count };
+        }),
         getSelected: () => state.filter.accounts,
         setSelected: (arr) => { state.filter.accounts = arr; },
         chipId: 'accountFilterBtn',
@@ -3137,16 +3159,16 @@
     }
 
     // ---------- Requester filter ----------
+    function requesterLabelFor(id) {
+      const r = (state.requesterStats || []).find(s => s.id === id);
+      if (r) return r.name || r.email || ('Requester · ' + String(id || '').slice(-6));
+      return 'Requester · ' + String(id || '').slice(-6);
+    }
     function renderRequesterFilterChip() {
       const sel = Array.isArray(state.filter.requesters) ? state.filter.requesters : [];
       let label = 'Any requester';
-      if (sel.length === 1) {
-        const r = (state.requesterStats || []).find(s => s.id === sel[0]);
-        label = r ? (r.name || r.email || 'Requester') : 'Requester';
-      } else if (sel.length > 1) {
-        const first = (state.requesterStats || []).find(s => s.id === sel[0]);
-        label = (first ? (first.name || first.email || 'Requester') : 'Requester') + ' +' + (sel.length - 1);
-      }
+      if (sel.length === 1) label = requesterLabelFor(sel[0]);
+      else if (sel.length > 1) label = requesterLabelFor(sel[0]) + ' +' + (sel.length - 1);
       return '<button type="button" class="filter-chip ' + (sel.length ? 'is-active' : '') + '"' +
         ' data-filter="requester" id="requesterFilterBtn">' +
         '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
@@ -3160,12 +3182,14 @@
       const stats = (state.requesterStats || []).slice();
       openMultiSelectFilterSheet({
         title: 'Requesters',
-        items: stats.map(s => ({
-          id: s.id,
-          label: s.name || s.email || 'Requester',
-          sublabel: s.name && s.email ? s.email : '',
-          count: s.count,
-        })),
+        items: stats.map(s => {
+          // Prefer name, then email, then a distinct fallback using the ID
+          // tail so we don't show a list full of identical 'Requester' rows
+          // when the contacts cache hasn't finished loading.
+          const label = s.name || s.email || ('Unnamed · ' + String(s.id).slice(-6));
+          const sublabel = s.name && s.email ? s.email : '';
+          return { id: s.id, label, sublabel, count: s.count };
+        }),
         getSelected: () => state.filter.requesters,
         setSelected: (arr) => { state.filter.requesters = arr; },
         chipId: 'requesterFilterBtn',
@@ -4399,10 +4423,19 @@
         state.error = null;
         patchView();
       }
-      // Warm people + account caches so we can show names/avatars
-      ensurePeopleLoaded();
-      // Re-render the list when accounts arrive so account names appear inline
-      ensureAccountsLoaded().then(() => { if (state.view === 'list') patchView(); });
+      // Warm people + account caches so we can show names/avatars. Both run
+      // in the background while issues load up front. When each one finishes,
+      // recompute filter stats so the Account + Requester pickers re-resolve
+      // entries that initially fell back to placeholder labels — and refresh
+      // the list so account/requester names appear in the cards too.
+      const refresh = () => {
+        if (state.view !== 'list') return;
+        // reapplyFilters() rebuilds state.accountStats + state.requesterStats
+        // from the now-warmer caches, then calls patchView() to re-render.
+        try { reapplyFilters(); } catch { patchView(); }
+      };
+      ensurePeopleLoaded().then(refresh);
+      ensureAccountsLoaded().then(refresh);
       try {
         // Pylon /issues requires a start_time/end_time window (RFC3339).
         // The window is user-controlled via the date-range filter (chip in the
