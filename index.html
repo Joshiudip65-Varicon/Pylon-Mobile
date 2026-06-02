@@ -795,7 +795,36 @@
       border-color: var(--accent);
       color: #fff;
     }
-    .filter-row-label { flex: 1; }
+    .filter-row-label {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .filter-row-sublabel {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    .filter-search {
+      width: 100%;
+      padding: 9px 12px;
+      margin-bottom: 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+    .filter-search:focus { border-color: var(--accent); }
+    .filter-empty {
+      list-style: none;
+      padding: 24px 8px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
     .filter-row-count {
       font-size: 12px;
       font-weight: 600;
@@ -2294,7 +2323,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v28';
+    const APP_VERSION = 'pylon-mobile-v29';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -2601,12 +2630,15 @@
       issues: [],      // post-filter, displayed
       filter: Object.assign(
         // Default to status='new' so the inbox lands on the most actionable
-        // tickets first; assignees is an array for multi-select (empty = anyone).
-        { state: 'new', assignees: [], q: '' },
+        // tickets first; assignees/accounts/requesters are arrays for multi-
+        // select (empty arrays = no filter on that dimension).
+        { state: 'new', assignees: [], accounts: [], requesters: [], q: '' },
         defaultDateWindow()
       ),
       stateCounts: {}, // { new: 2, waiting_on_you: 18, ... }
       assigneeStats: [], // [{id, name, count}, ...] top assignees
+      accountStats: [],  // [{id, name, count}, ...] all accounts
+      requesterStats: [], // [{id, name, email, count}, ...] all requesters
       issue: null,
       messages: [],
       loading: false,
@@ -2858,6 +2890,8 @@
         <div class="filter-row" id="filterRow">
           ${renderStatusFilterChip()}
           ${renderAssigneeFilterChip()}
+          ${renderAccountFilterChip()}
+          ${renderRequesterFilterChip()}
           ${renderDateChip()}
         </div>
         <div id="listContainer">
@@ -2881,9 +2915,11 @@
         const btn = e.target.closest('.filter-chip');
         if (!btn) return;
         const which = btn.dataset.filter;
-        if (which === 'status')   openStatusFilterSheet();
-        else if (which === 'assignee') openAssigneeFilterSheet();
-        else if (which === 'date')     openDatePicker();
+        if (which === 'status')         openStatusFilterSheet();
+        else if (which === 'assignee')  openAssigneeFilterSheet();
+        else if (which === 'account')   openAccountFilterSheet();
+        else if (which === 'requester') openRequesterFilterSheet();
+        else if (which === 'date')      openDatePicker();
       });
 
       const list = document.getElementById('listContainer');
@@ -3051,6 +3087,169 @@
       });
       overlay.querySelector('[data-action="clear"]').addEventListener('click', function () {
         state.filter.assignees = [];
+        overlay.querySelectorAll('.filter-row-btn').forEach(b => b.removeAttribute('aria-pressed'));
+      });
+      overlay.querySelector('[data-action="done"]').addEventListener('click', close);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+      document.addEventListener('keydown', onKey);
+    }
+
+    // ---------- Account filter ----------
+    function renderAccountFilterChip() {
+      const sel = Array.isArray(state.filter.accounts) ? state.filter.accounts : [];
+      let label = 'All accounts';
+      if (sel.length === 1) {
+        const v = sel[0];
+        if (v === '__none__') label = 'No account';
+        else {
+          const a = (state.accountStats || []).find(s => s.id === v);
+          label = a ? (a.name || 'Account') : 'Account';
+        }
+      } else if (sel.length > 1) {
+        const first = sel[0];
+        const head = first === '__none__' ? 'No account'
+          : (((state.accountStats || []).find(s => s.id === first) || { name: 'Account' }).name || 'Account');
+        label = head + ' +' + (sel.length - 1);
+      }
+      return '<button type="button" class="filter-chip ' + (sel.length ? 'is-active' : '') + '"' +
+        ' data-filter="account" id="accountFilterBtn">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/><path d="M9 18v.01"/></svg>' +
+        '<span class="filter-chip-value">' + escapeHtml(label) + '</span>' +
+        '<svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
+        '</button>';
+    }
+
+    function openAccountFilterSheet() {
+      const stats = (state.accountStats || []).slice();
+      // Move "No account" bucket to the bottom for tidiness.
+      stats.sort((a, b) => (a.id === '__none__') - (b.id === '__none__') || b.count - a.count);
+      openMultiSelectFilterSheet({
+        title: 'Accounts',
+        items: stats.map(s => ({ id: s.id, label: s.name || (s.id === '__none__' ? 'No account' : 'Account'), count: s.count })),
+        getSelected: () => state.filter.accounts,
+        setSelected: (arr) => { state.filter.accounts = arr; },
+        chipId: 'accountFilterBtn',
+        renderChip: renderAccountFilterChip,
+        searchable: true,
+        searchPlaceholder: 'Filter accounts…',
+      });
+    }
+
+    // ---------- Requester filter ----------
+    function renderRequesterFilterChip() {
+      const sel = Array.isArray(state.filter.requesters) ? state.filter.requesters : [];
+      let label = 'Any requester';
+      if (sel.length === 1) {
+        const r = (state.requesterStats || []).find(s => s.id === sel[0]);
+        label = r ? (r.name || r.email || 'Requester') : 'Requester';
+      } else if (sel.length > 1) {
+        const first = (state.requesterStats || []).find(s => s.id === sel[0]);
+        label = (first ? (first.name || first.email || 'Requester') : 'Requester') + ' +' + (sel.length - 1);
+      }
+      return '<button type="button" class="filter-chip ' + (sel.length ? 'is-active' : '') + '"' +
+        ' data-filter="requester" id="requesterFilterBtn">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11h-6"/></svg>' +
+        '<span class="filter-chip-value">' + escapeHtml(label) + '</span>' +
+        '<svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
+        '</button>';
+    }
+
+    function openRequesterFilterSheet() {
+      const stats = (state.requesterStats || []).slice();
+      openMultiSelectFilterSheet({
+        title: 'Requesters',
+        items: stats.map(s => ({
+          id: s.id,
+          label: s.name || s.email || 'Requester',
+          sublabel: s.name && s.email ? s.email : '',
+          count: s.count,
+        })),
+        getSelected: () => state.filter.requesters,
+        setSelected: (arr) => { state.filter.requesters = arr; },
+        chipId: 'requesterFilterBtn',
+        renderChip: renderRequesterFilterChip,
+        searchable: true,
+        searchPlaceholder: 'Filter by name or email…',
+      });
+    }
+
+    // Generic multi-select popover used by Account + Requester filters. Pulls
+    // out the boilerplate so we don't repeat overlay-create / open / wire / close.
+    function openMultiSelectFilterSheet(opts) {
+      const overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+      const itemsHtml = function (items) {
+        if (!items.length) return '<li class="filter-empty">No matches</li>';
+        return items.map(function (it) {
+          const checked = opts.getSelected().includes(it.id);
+          return '<li><button type="button" class="filter-row-btn" data-value="' + escapeAttr(it.id) + '"' +
+            (checked ? ' aria-pressed="true"' : '') + '>' +
+            '<span class="filter-row-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>' +
+            '<span class="filter-row-label">' + escapeHtml(it.label) +
+              (it.sublabel ? '<span class="filter-row-sublabel">' + escapeHtml(it.sublabel) + '</span>' : '') +
+            '</span>' +
+            (it.count != null ? '<span class="filter-row-count">' + it.count + '</span>' : '') +
+          '</button></li>';
+        }).join('');
+      };
+
+      overlay.innerHTML =
+        '<div class="confirm-modal filter-sheet" role="dialog">' +
+          '<h3>' + escapeHtml(opts.title) + ' <span class="filter-sheet-hint">(select multiple)</span></h3>' +
+          (opts.searchable
+            ? '<input type="search" class="filter-search" id="filterSheetSearch" placeholder="' + escapeAttr(opts.searchPlaceholder || 'Search…') + '" autocomplete="off"/>'
+            : '') +
+          '<ul class="filter-list" id="filterSheetList">' + itemsHtml(opts.items) + '</ul>' +
+          '<div class="confirm-actions">' +
+            '<button type="button" class="confirm-cancel" data-action="clear">Clear all</button>' +
+            '<button type="button" class="confirm-danger" data-action="done" style="background: var(--accent);">Done</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      requestAnimationFrame(function () { overlay.classList.add('is-open'); });
+
+      const $list = overlay.querySelector('#filterSheetList');
+      const $search = overlay.querySelector('#filterSheetSearch');
+
+      function close() {
+        overlay.classList.remove('is-open');
+        setTimeout(function () { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 160);
+        document.removeEventListener('keydown', onKey);
+        // Apply: refresh the list + chip label using whatever the user picked.
+        reapplyFilters();
+        const chip = document.getElementById(opts.chipId);
+        if (chip) chip.outerHTML = opts.renderChip();
+      }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+
+      $list.addEventListener('click', function (e) {
+        const btn = e.target.closest('.filter-row-btn');
+        if (!btn) return;
+        const v = btn.dataset.value;
+        const sel = opts.getSelected();
+        const idx = sel.indexOf(v);
+        if (idx >= 0) sel.splice(idx, 1);
+        else sel.push(v);
+        opts.setSelected(sel);
+        btn.setAttribute('aria-pressed', idx < 0 ? 'true' : 'false');
+      });
+
+      if ($search) {
+        $search.addEventListener('input', function () {
+          const q = $search.value.trim().toLowerCase();
+          const filtered = !q ? opts.items
+            : opts.items.filter(it =>
+                (it.label || '').toLowerCase().includes(q) ||
+                (it.sublabel || '').toLowerCase().includes(q)
+              );
+          $list.innerHTML = itemsHtml(filtered);
+        });
+      }
+
+      overlay.querySelector('[data-action="clear"]').addEventListener('click', function () {
+        opts.setSelected([]);
         overlay.querySelectorAll('.filter-row-btn').forEach(b => b.removeAttribute('aria-pressed'));
       });
       overlay.querySelector('[data-action="done"]').addEventListener('click', close);
@@ -4275,6 +4474,19 @@
           });
           if (!matches) return false;
         }
+        if (!skip.has('account') && Array.isArray(state.filter.accounts) && state.filter.accounts.length) {
+          const acctId = i.account_id || (i.account && i.account.id) || '';
+          const matches = state.filter.accounts.some(filt => {
+            if (filt === '__none__') return !acctId;
+            return acctId === filt;
+          });
+          if (!matches) return false;
+        }
+        if (!skip.has('requester') && Array.isArray(state.filter.requesters) && state.filter.requesters.length) {
+          const reqId = (i.requester && i.requester.id) || (i.contact && i.contact.id) || i.requester_id || '';
+          const matches = state.filter.requesters.some(filt => reqId === filt);
+          if (!matches) return false;
+        }
         if (!skip.has('q') && state.filter.q) {
           const needle = state.filter.q.toLowerCase();
           const hay = [
@@ -4295,8 +4507,12 @@
       state.issues = applyClientFilters(state.allIssues);
       // State chip counts — apply every filter EXCEPT state
       state.stateCounts = countByState(applyClientFilters(state.allIssues, new Set(['state'])));
-      // Assignee chip stats — apply every filter EXCEPT assignee
-      state.assigneeStats = topAssignees(applyClientFilters(state.allIssues, new Set(['assignee'])));
+      // Each dimension's stats are computed by applying every OTHER filter, so
+      // the counts a user sees in the popover reflect what they'd see if they
+      // picked that option (without losing the rest of their filters).
+      state.assigneeStats  = topAssignees(applyClientFilters(state.allIssues, new Set(['assignee'])));
+      state.accountStats   = topAccounts(applyClientFilters(state.allIssues, new Set(['account'])));
+      state.requesterStats = topRequesters(applyClientFilters(state.allIssues, new Set(['requester'])));
       patchView();
     }
 
@@ -4338,6 +4554,54 @@
         }
       }
       return Array.from(map.values()).sort((a, b) => b.count - a.count).slice(0, 6);
+    }
+
+    // Build account stats from the current issue list. Empty account_id is
+    // bucketed under a special '__none__' key so the user can filter to
+    // "No account" tickets explicitly.
+    function topAccounts(issues) {
+      const map = new Map();
+      for (const i of issues) {
+        const acctId = i.account_id || (i.account && i.account.id) || '__none__';
+        const cur = map.get(acctId) || { id: acctId, count: 0, name: '' };
+        cur.count += 1;
+        if (!cur.name) cur.name = resolveAccountName(i) || (acctId === '__none__' ? 'No account' : '');
+        map.set(acctId, cur);
+      }
+      // Resolve names once more in case accountCache caught up.
+      for (const v of map.values()) {
+        if (!v.name && v.id && v.id !== '__none__') {
+          const cached = accountCache.byId && accountCache.byId[v.id];
+          if (cached) v.name = cached.name || cached.title || cached.display_name || '';
+        }
+      }
+      return Array.from(map.values())
+        .sort((a, b) => b.count - a.count);
+    }
+
+    // Build requester stats. Picks the first non-empty (name | email | id) as
+    // the display label.
+    function topRequesters(issues) {
+      const map = new Map();
+      for (const i of issues) {
+        const r = i.requester || i.contact || {};
+        const rId = r.id || i.requester_id;
+        if (!rId) continue;
+        const cur = map.get(rId) || { id: rId, count: 0, name: '', email: '' };
+        cur.count += 1;
+        if (!cur.name) cur.name = r.name || '';
+        if (!cur.email) cur.email = r.email || '';
+        map.set(rId, cur);
+      }
+      // Try to fill missing names from peopleCache (contacts).
+      for (const v of map.values()) {
+        if (!v.name) {
+          const p = resolvePerson(v.id, 'contact');
+          if (p) { v.name = p.name || ''; v.email = v.email || p.email || ''; }
+        }
+      }
+      return Array.from(map.values())
+        .sort((a, b) => b.count - a.count);
     }
 
     async function loadIssueDetail(id, { silent } = {}) {
@@ -4751,6 +5015,8 @@
       row.innerHTML =
         renderStatusFilterChip() +
         renderAssigneeFilterChip() +
+        renderAccountFilterChip() +
+        renderRequesterFilterChip() +
         renderDateChip();
       container.innerHTML = renderListBody();
       const retry = document.getElementById('retryBtn');
