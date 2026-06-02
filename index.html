@@ -56,7 +56,7 @@
       --tap: 44px;
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
-      --header-h: 56px;
+      --header-h: 42px;
       --bottom-nav-h: 50px;
       --font: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
     }
@@ -168,10 +168,9 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      /* Tight top padding — just enough to clear the dynamic island / status
-         bar (safe-top), plus 2px breathing room. Was +10px which left a
-         visible gap above the title on iPhone 17. */
-      padding: calc(var(--safe-top) + 2px) 14px 6px;
+      /* Minimal padding — clear the dynamic island via safe-top, then just
+         1px breathing room above and 4px below the title. */
+      padding: calc(var(--safe-top) + 1px) 14px 4px;
       background: color-mix(in srgb, var(--bg) 88%, transparent);
       backdrop-filter: saturate(180%) blur(14px);
       -webkit-backdrop-filter: saturate(180%) blur(14px);
@@ -180,7 +179,7 @@
     }
     .header-title {
       flex: 1;
-      font-size: 17px;
+      font-size: 15px;
       font-weight: 600;
       letter-spacing: -.01em;
       text-align: center;
@@ -895,10 +894,11 @@
       margin-top: auto;
       position: sticky;
       bottom: max(env(keyboard-inset-height, 0px), var(--kb-inset, 0px));
-      /* Minimal padding. The body::after filler bar below covers the safe-
-         area-inset-bottom region with the surface colour so the composer
-         flows visually into it without a dark gap. */
-      padding: 6px 0 6px;
+      /* Padding-bottom: when no keyboard is up, lift the pill above the
+         home-indicator area so it isn't clipped. env(safe-area-inset-bottom)
+         goes to 0 when the keyboard's shown (kb covers that region), so the
+         padding collapses to 6px and the composer rides right above the kb. */
+      padding: 6px 0 max(env(safe-area-inset-bottom, 0px), 6px);
       background: linear-gradient(to bottom, transparent, var(--bg) 22%);
     }
     .composer-card {
