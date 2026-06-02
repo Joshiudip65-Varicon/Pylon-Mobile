@@ -278,6 +278,57 @@
       transform: scale(.95);
       transition: transform .15s ease;
     }
+    /* Date-range picker modal — wider, left-aligned. */
+    .confirm-modal.date-modal { max-width: 380px; text-align: left; }
+    .date-modal h3 { margin-bottom: 14px; }
+    .date-presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .date-presets .chip {
+      padding: 6px 12px;
+      font-size: 12.5px;
+    }
+    .date-presets .chip[aria-pressed="true"] {
+      background: var(--accent);
+      color: var(--accent-text);
+      border-color: transparent;
+    }
+    .date-inputs {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .date-inputs label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .date-inputs label > span {
+      width: 42px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .date-inputs input[type="date"] {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-2);
+      color: var(--text);
+      color-scheme: light dark;
+    }
+    .chip-date {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
     .confirm-overlay.is-open .confirm-modal { transform: scale(1); }
     .confirm-modal h3 {
       font-size: 17px;
@@ -2251,11 +2302,27 @@
     }
 
     // ============ State / Router ============
+    // Date-window defaults: last 90 days. dateFrom is inclusive (start of day),
+    // dateTo is exclusive (end of "today" → tomorrow). Stored as YYYY-MM-DD
+    // strings so they round-trip cleanly through <input type="date">.
+    function ymd(d) {
+      const pad = (n) => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    }
+    function defaultDateWindow() {
+      const today = new Date();
+      const start = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+      return { dateFrom: ymd(start), dateTo: ymd(today) };
+    }
+
     const state = {
       view: 'list',
       allIssues: [],   // raw from server, used for counts + assignee list
       issues: [],      // post-filter, displayed
-      filter: { state: '', assignee: 'all', q: '' },
+      filter: Object.assign(
+        { state: '', assignee: 'all', q: '' },
+        defaultDateWindow()
+      ),
       stateCounts: {}, // { new: 2, waiting_on_you: 18, ... }
       assigneeStats: [], // [{id, name, count}, ...] top assignees
       issue: null,
@@ -2477,6 +2544,7 @@
         </div>
         <div class="filter-bar" id="filterBar">${renderStateChips()}</div>
         <div class="filter-bar" id="assigneeBar" style="margin-top: -4px;">${renderAssigneeChips()}</div>
+        <div class="filter-bar" id="dateBar" style="margin-top: -4px;">${renderDateChip()}</div>
         <div id="listContainer">
           ${renderListBody()}
         </div>
@@ -2509,6 +2577,11 @@
         reapplyFilters();
       });
 
+      const $dateBar = document.getElementById('dateBar');
+      $dateBar.addEventListener('click', (e) => {
+        if (e.target.closest('.chip')) openDatePicker();
+      });
+
       const list = document.getElementById('listContainer');
       list.addEventListener('click', (e) => {
         const item = e.target.closest('.issue-card');
@@ -2536,6 +2609,112 @@
           ${escapeHtml(label)}<span class="chip-count">${c}</span>
         </button>
       `).join('');
+    }
+
+    // Friendly label for the current date window. Recognises common presets
+    // (Last 7 / 30 / 90 / 180 / 365 days) so the chip stays short; falls back
+    // to "Mar 1 – Jun 1" for arbitrary ranges.
+    function dateWindowLabel() {
+      const f = state.filter.dateFrom;
+      const t = state.filter.dateTo;
+      if (!f || !t) return 'Last 90 days';
+      const today = ymd(new Date());
+      if (t === today) {
+        const start = new Date(f + 'T00:00:00');
+        const days = Math.round((Date.now() - start.getTime()) / (24 * 60 * 60 * 1000));
+        if (days === 7)   return 'Last 7 days';
+        if (days === 30)  return 'Last 30 days';
+        if (days === 90)  return 'Last 90 days';
+        if (days === 180) return 'Last 6 months';
+        if (days === 365) return 'Last year';
+      }
+      const fmt = (s) => new Date(s + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      return fmt(f) + ' – ' + fmt(t);
+    }
+
+    function renderDateChip() {
+      return '<button class="chip chip-date" data-action="open-date-picker" aria-label="Change date range">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<rect x="3" y="4" width="18" height="18" rx="2"/>' +
+        '<line x1="16" y1="2" x2="16" y2="6"/>' +
+        '<line x1="8" y1="2" x2="8" y2="6"/>' +
+        '<line x1="3" y1="10" x2="21" y2="10"/>' +
+        '</svg>' +
+        '<span>' + escapeHtml(dateWindowLabel()) + '</span>' +
+        '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6;">' +
+        '<polyline points="6 9 12 15 18 9"/></svg>' +
+      '</button>';
+    }
+
+    function openDatePicker() {
+      const presets = [
+        ['Last 7 days',   7],
+        ['Last 30 days',  30],
+        ['Last 90 days',  90],
+        ['Last 6 months', 180],
+        ['Last year',     365],
+      ];
+      const overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML =
+        '<div class="confirm-modal date-modal" role="dialog" aria-modal="true">' +
+          '<h3>Filter by date</h3>' +
+          '<div class="date-presets">' +
+            presets.map(function (p) {
+              return '<button type="button" class="chip date-preset" data-days="' + p[1] + '">' +
+                escapeHtml(p[0]) + '</button>';
+            }).join('') +
+          '</div>' +
+          '<div class="date-inputs">' +
+            '<label><span>From</span><input type="date" id="dateFromInput" value="' + escapeAttr(state.filter.dateFrom || '') + '"></label>' +
+            '<label><span>To</span><input type="date" id="dateToInput" value="' + escapeAttr(state.filter.dateTo || '') + '"></label>' +
+          '</div>' +
+          '<div class="confirm-actions">' +
+            '<button type="button" class="confirm-cancel" data-action="cancel">Cancel</button>' +
+            '<button type="button" class="confirm-danger" data-action="apply" style="background: var(--accent);">Apply</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      requestAnimationFrame(function () { overlay.classList.add('is-open'); });
+
+      const $from = overlay.querySelector('#dateFromInput');
+      const $to   = overlay.querySelector('#dateToInput');
+
+      // Preset chips just populate the inputs — applying still requires Apply
+      overlay.querySelectorAll('.date-preset').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const days = parseInt(btn.dataset.days, 10);
+          const today = new Date();
+          const start = new Date(today.getTime() - days * 24 * 60 * 60 * 1000);
+          $from.value = ymd(start);
+          $to.value   = ymd(today);
+          overlay.querySelectorAll('.date-preset').forEach(function (b) { b.removeAttribute('aria-pressed'); });
+          btn.setAttribute('aria-pressed', 'true');
+        });
+      });
+
+      function close() {
+        overlay.classList.remove('is-open');
+        setTimeout(function () { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 160);
+        document.removeEventListener('keydown', onKey);
+      }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+      overlay.querySelector('[data-action="cancel"]').addEventListener('click', close);
+      overlay.querySelector('[data-action="apply"]').addEventListener('click', function () {
+        const f = $from.value;
+        const t = $to.value;
+        if (!f || !t) { toast('Please pick both From and To dates', 'error'); return; }
+        if (f > t) { toast('From date must be on or before To date', 'error'); return; }
+        state.filter.dateFrom = f;
+        state.filter.dateTo   = t;
+        close();
+        // Refresh the date chip + refetch
+        const $dateBar = document.getElementById('dateBar');
+        if ($dateBar) $dateBar.innerHTML = renderDateChip();
+        loadIssues();
+      });
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+      document.addEventListener('keydown', onKey);
     }
 
     function renderAssigneeChips() {
@@ -3564,11 +3743,17 @@
       ensureAccountsLoaded().then(() => { if (state.view === 'list') patchView(); });
       try {
         // Pylon /issues requires a start_time/end_time window (RFC3339).
-        // Default to the last 365 days so the mobile count matches the web
-        // app (which doesn't apply a window). Page through with cursor to
-        // collect ALL issues in the window, not just the first 100.
-        const end = new Date();
-        const start = new Date(end.getTime() - 365 * 24 * 60 * 60 * 1000);
+        // The window is user-controlled via the date-range filter (chip in the
+        // filter bar opens a picker). Default is last 90 days; user can pick
+        // any window. We paginate through with cursor to collect all issues
+        // in that window — not just the first 100.
+        const fromStr = state.filter.dateFrom || defaultDateWindow().dateFrom;
+        const toStr   = state.filter.dateTo   || defaultDateWindow().dateTo;
+        // dateFrom is inclusive start-of-day; dateTo is inclusive end-of-day
+        // (add one day so 2026-06-01 covers all of June 1st).
+        const start = new Date(fromStr + 'T00:00:00');
+        const endIncl = new Date(toStr + 'T00:00:00');
+        const end = new Date(endIncl.getTime() + 24 * 60 * 60 * 1000);
         const baseQuery = {
           start_time: start.toISOString(),
           end_time: end.toISOString(),
