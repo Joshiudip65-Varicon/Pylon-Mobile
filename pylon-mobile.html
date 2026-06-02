@@ -154,7 +154,10 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: calc(var(--safe-top) + 10px) 14px 10px;
+      /* Tight top padding — just enough to clear the dynamic island / status
+         bar (safe-top), plus 2px breathing room. Was +10px which left a
+         visible gap above the title on iPhone 17. */
+      padding: calc(var(--safe-top) + 2px) 14px 6px;
       background: color-mix(in srgb, var(--bg) 88%, transparent);
       backdrop-filter: saturate(180%) blur(14px);
       -webkit-backdrop-filter: saturate(180%) blur(14px);
@@ -820,13 +823,10 @@
       margin-top: auto;
       position: sticky;
       bottom: max(env(keyboard-inset-height, 0px), var(--kb-inset, 0px));
-      /* Same standalone-PWA fix as .bottom-nav: extend the composer through
-         the safe-area-inset-bottom region when no keyboard is up, so there's
-         no dead band of body background below the Send row. When the keyboard
-         is up the sticky-bottom math already places us above it; the safe
-         area is 0 in that case (kb covers it). */
-      transform: translateY(env(safe-area-inset-bottom, 0px));
-      padding: 6px 0 calc(env(safe-area-inset-bottom, 0px) + 6px);
+      /* Minimal padding. The body::after filler bar below covers the safe-
+         area-inset-bottom region with the surface colour so the composer
+         flows visually into it without a dark gap. */
+      padding: 6px 0 6px;
       background: linear-gradient(to bottom, transparent, var(--bg) 22%);
     }
     .composer-card {
@@ -1429,21 +1429,28 @@
       display: flex;
       max-width: 720px;
       margin: 0 auto;
-      /* In standalone PWA mode, `bottom: 0` anchors to the TOP of the
-         safe-area-inset-bottom (not the actual screen edge), so the home-
-         indicator region below ends up as a dead band of body background.
-         In Safari that band is hidden under the URL bar, which is why the
-         user sees it only in the installed app. Fix: pull the nav's bottom
-         edge DOWN past bottom: 0 by translating it the safe-inset amount,
-         then add equal padding-bottom so the buttons stay above the home
-         indicator. Net effect: nav background extends all the way to the
-         physical screen edge in standalone mode AND in Safari. */
-      transform: translateY(env(safe-area-inset-bottom, 0px));
-      padding: 2px 6px calc(env(safe-area-inset-bottom, 0px) + 6px);
+      /* Minimal padding — buttons sit right at the bottom. The body::after
+         filler below paints the safe-area region in the same surface colour
+         so the two visually merge into one continuous bar with no gap. */
+      padding: 2px 6px 4px;
       background: color-mix(in srgb, var(--surface) 92%, transparent);
       backdrop-filter: saturate(180%) blur(18px);
       -webkit-backdrop-filter: saturate(180%) blur(18px);
       border-top: 1px solid var(--border);
+    }
+    /* Paint the safe-area-inset-bottom region with the nav surface colour so
+       it doesn't show through as dark body background. Only applies in
+       standalone PWA mode — Safari hides this area under its URL bar so
+       there's nothing to fix. */
+    html.is-standalone body::after {
+      content: '';
+      position: fixed;
+      left: 0; right: 0;
+      bottom: 0;
+      height: env(safe-area-inset-bottom, 0px);
+      background: color-mix(in srgb, var(--surface) 92%, var(--bg));
+      z-index: 19;
+      pointer-events: none;
     }
     .bottom-nav-btn {
       flex: 1;
@@ -3557,19 +3564,37 @@
       ensureAccountsLoaded().then(() => { if (state.view === 'list') patchView(); });
       try {
         // Pylon /issues requires a start_time/end_time window (RFC3339).
-        // Default to the last 30 days. Pull a larger limit so counts are meaningful.
+        // Default to the last 365 days so the mobile count matches the web
+        // app (which doesn't apply a window). Page through with cursor to
+        // collect ALL issues in the window, not just the first 100.
         const end = new Date();
-        const start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
-        const q = {
+        const start = new Date(end.getTime() - 365 * 24 * 60 * 60 * 1000);
+        const baseQuery = {
           start_time: start.toISOString(),
           end_time: end.toISOString(),
           limit: 100,
         };
-        const resp = await Pylon.listIssues(q);
-        state.allIssues = extractList(resp);
-        // Compute all derived state via the same pipeline filter+counts use
+        let all = [];
+        let cursor = null;
+        let pages = 0;
+        const MAX_PAGES = 30; // hard cap so a misbehaving API can't loop forever
+        do {
+          const q = cursor ? Object.assign({}, baseQuery, { cursor }) : baseQuery;
+          const resp = await Pylon.listIssues(q);
+          const items = extractList(resp);
+          all = all.concat(items);
+          // Update progressive count so the "All N" chip reflects fetched-so-far
+          state.allIssues = all;
+          if (pages === 0) reapplyFilters(); // show first page immediately
+          // Look for cursor in common shapes: pagination.cursor + has_next_page
+          const pg = resp && (resp.pagination || resp.meta || resp);
+          const hasNext = pg && (pg.has_next_page === true || (pg.next_cursor && pg.has_next_page !== false));
+          cursor = hasNext ? (pg.cursor || pg.next_cursor || null) : null;
+          pages += 1;
+        } while (cursor && pages < MAX_PAGES);
+        state.allIssues = all;
         reapplyFilters();
-        return; // reapplyFilters already calls patchView
+        return;
       } catch (e) {
         state.allIssues = [];
         state.issues = [];
