@@ -280,7 +280,14 @@
     }
     /* Date-range picker modal — wider, left-aligned. */
     .confirm-modal.date-modal { max-width: 380px; text-align: left; }
-    .date-modal h3 { margin-bottom: 14px; }
+    .date-modal h3 { margin-bottom: 8px; }
+    .date-hint {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin: 0 0 12px;
+      line-height: 1.4;
+    }
+    .date-hint strong { color: var(--text); font-weight: 600; }
     .date-presets {
       display: flex;
       flex-wrap: wrap;
@@ -2302,17 +2309,26 @@
     }
 
     // ============ State / Router ============
-    // Date-window defaults: last 90 days. dateFrom is inclusive (start of day),
-    // dateTo is exclusive (end of "today" → tomorrow). Stored as YYYY-MM-DD
-    // strings so they round-trip cleanly through <input type="date">.
+    // Date-window settings. Pylon's /issues endpoint hard-caps the requested
+    // range at ~30 days — past that the API returns no results (or an error).
+    // We default to 28 days (a safe 2-day buffer) and refuse any span over
+    // MAX_DATE_RANGE_DAYS at the picker level.
+    const MAX_DATE_RANGE_DAYS = 28;
     function ymd(d) {
       const pad = (n) => String(n).padStart(2, '0');
       return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
     }
     function defaultDateWindow() {
       const today = new Date();
-      const start = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const start = new Date(today.getTime() - MAX_DATE_RANGE_DAYS * 24 * 60 * 60 * 1000);
       return { dateFrom: ymd(start), dateTo: ymd(today) };
+    }
+    // Calendar-day span between two YYYY-MM-DD strings, inclusive of both.
+    function dateSpanDays(fromStr, toStr) {
+      if (!fromStr || !toStr) return 0;
+      const a = new Date(fromStr + 'T00:00:00').getTime();
+      const b = new Date(toStr + 'T00:00:00').getTime();
+      return Math.round((b - a) / (24 * 60 * 60 * 1000));
     }
 
     const state = {
@@ -2611,22 +2627,20 @@
       `).join('');
     }
 
-    // Friendly label for the current date window. Recognises common presets
-    // (Last 7 / 30 / 90 / 180 / 365 days) so the chip stays short; falls back
-    // to "Mar 1 – Jun 1" for arbitrary ranges.
+    // Friendly label for the current date window. Recognises the in-range
+    // presets so the chip stays short; falls back to "Mar 1 – Jun 1" for
+    // arbitrary ranges.
     function dateWindowLabel() {
       const f = state.filter.dateFrom;
       const t = state.filter.dateTo;
-      if (!f || !t) return 'Last 90 days';
+      if (!f || !t) return 'Last ' + MAX_DATE_RANGE_DAYS + ' days';
       const today = ymd(new Date());
       if (t === today) {
-        const start = new Date(f + 'T00:00:00');
-        const days = Math.round((Date.now() - start.getTime()) / (24 * 60 * 60 * 1000));
-        if (days === 7)   return 'Last 7 days';
-        if (days === 30)  return 'Last 30 days';
-        if (days === 90)  return 'Last 90 days';
-        if (days === 180) return 'Last 6 months';
-        if (days === 365) return 'Last year';
+        const days = dateSpanDays(f, t);
+        if (days === 7)  return 'Last 7 days';
+        if (days === 14) return 'Last 14 days';
+        if (days === 21) return 'Last 21 days';
+        if (days === 28) return 'Last 28 days';
       }
       const fmt = (s) => new Date(s + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       return fmt(f) + ' – ' + fmt(t);
@@ -2647,18 +2661,19 @@
     }
 
     function openDatePicker() {
+      // Presets cap at the Pylon API's ~30-day limit; we use 28 as a safe ceiling.
       const presets = [
-        ['Last 7 days',   7],
-        ['Last 30 days',  30],
-        ['Last 90 days',  90],
-        ['Last 6 months', 180],
-        ['Last year',     365],
+        ['Last 7 days',  7],
+        ['Last 14 days', 14],
+        ['Last 21 days', 21],
+        ['Last 28 days', 28],
       ];
       const overlay = document.createElement('div');
       overlay.className = 'confirm-overlay';
       overlay.innerHTML =
         '<div class="confirm-modal date-modal" role="dialog" aria-modal="true">' +
           '<h3>Filter by date</h3>' +
+          '<p class="date-hint">Pylon\'s API caps the date range at ~30 days. Pick a window up to <strong>' + MAX_DATE_RANGE_DAYS + ' days</strong>.</p>' +
           '<div class="date-presets">' +
             presets.map(function (p) {
               return '<button type="button" class="chip date-preset" data-days="' + p[1] + '">' +
@@ -2705,6 +2720,11 @@
         const t = $to.value;
         if (!f || !t) { toast('Please pick both From and To dates', 'error'); return; }
         if (f > t) { toast('From date must be on or before To date', 'error'); return; }
+        const span = dateSpanDays(f, t);
+        if (span > MAX_DATE_RANGE_DAYS) {
+          toast('Date range can\'t exceed ' + MAX_DATE_RANGE_DAYS + ' days (Pylon API limit). You picked ' + span + ' days.', 'error');
+          return;
+        }
         state.filter.dateFrom = f;
         state.filter.dateTo   = t;
         close();
