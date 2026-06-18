@@ -2380,7 +2380,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v32';
+    const APP_VERSION = 'pylon-mobile-v33';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -2761,6 +2761,17 @@
       // Opening a (newly-tapped) ticket should start at the top, not at
       // whatever scrollY the previous detail view ended at.
       if (view === 'detail' && opts.issue) scrollPositions.detail = 0;
+
+      // Push a History API entry on forward navigation so the Android system
+      // back gesture (and the browser back button) moves through views inside
+      // the app instead of exiting the PWA. Skip when we're already responding
+      // to a popstate event — that would create a loop.
+      if (!opts._fromHistory) {
+        try {
+          const issueRef = (opts.issue && (opts.issue.id || opts.issue.number || opts.issue)) || null;
+          history.pushState({ view, issueRef }, '');
+        } catch {}
+      }
 
       render();
       if (view === 'list' && !state.issues.length) loadIssues();
@@ -5148,11 +5159,65 @@
     // ============ Header actions ============
 
     hdrLeft.addEventListener('click', () => {
-      if (state.view === 'detail') navigate('list');
-      else if (state.view === 'settings') navigate('list');
-      else if (state.view === 'netlog') { state.view = 'settings'; render(); }
-      else if (state.view === 'signature') { state.view = 'settings'; render(); }
+      // Route the in-app back button through history.back() so it triggers the
+      // same popstate handler as the Android system back gesture. That keeps
+      // both paths converging on one navigation routine.
+      try { history.back(); }
+      catch {
+        // Fallback if for some reason history isn't available
+        if (state.view === 'detail') navigate('list');
+        else if (state.view === 'settings') navigate('list');
+        else if (state.view === 'netlog') { state.view = 'settings'; render(); }
+        else if (state.view === 'signature') { state.view = 'settings'; render(); }
+      }
     });
+
+    // ============ Android back-button / browser-history integration ============
+    // Without this, the Android system back gesture exits the PWA from any
+    // view. With it, back moves through the view stack (detail → inbox,
+    // settings → inbox, netlog/signature → settings). Back from the inbox
+    // itself exits the app naturally — standard mobile app behaviour.
+    (function setupHistoryNav() {
+      // Tag the initial history entry so popstate handlers always have a
+      // state object to read against.
+      try { history.replaceState({ view: state.view || 'list' }, ''); } catch {}
+
+      window.addEventListener('popstate', function () {
+        // A back gesture should dismiss any open modal first — lightbox, AI
+        // sheet, date picker, account/assignee popover, overflow menu, etc.
+        const overlays = document.querySelectorAll(
+          '.lightbox, .ai-sheet-overlay, .confirm-overlay, .popover-menu, .popover-menu-backdrop'
+        );
+        if (overlays.length) {
+          overlays.forEach(el => el.remove());
+          document.body.style.overflow = '';
+          // The pop just consumed our forward entry; push it back so the
+          // user stays on the current view rather than navigating away too.
+          try { history.pushState({ view: state.view }, ''); } catch {}
+          return;
+        }
+
+        // Detail → Inbox
+        if (state.view === 'detail') {
+          navigate('list', { _fromHistory: true });
+          return;
+        }
+        // Settings → Inbox
+        if (state.view === 'settings') {
+          navigate('list', { _fromHistory: true });
+          return;
+        }
+        // Netlog / Signature are subviews of Settings (not pushed via
+        // navigate()), so we move to settings directly and re-render.
+        if (state.view === 'netlog' || state.view === 'signature') {
+          state.view = 'settings';
+          render();
+          return;
+        }
+        // On the inbox itself: nothing to do — the browser will exit the PWA,
+        // matching standard mobile-app behaviour where back from root closes.
+      });
+    })();
     hdrRight.addEventListener('click', () => {
       if (state.view === 'list') navigate('settings');
     });
@@ -5785,10 +5850,15 @@
           '</div>' +
         '</div>';
       document.body.appendChild(overlay);
+      // Lock body scroll while the sheet is open so the page underneath
+      // doesn't compete with the sheet's own scroll on Android Chrome.
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
       requestAnimationFrame(function () { overlay.classList.add('is-open'); });
 
       function close() {
         overlay.classList.remove('is-open');
+        document.body.style.overflow = prevOverflow;
         setTimeout(function () { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 220);
         document.removeEventListener('keydown', onKey);
       }
@@ -5799,13 +5869,31 @@
       return overlay;
     }
 
+    // After populating the sheet body, force its scrollTop to 0. On Android
+    // Chrome the inserted content sometimes lands with the scroll partway
+    // down (the previous innerHTML's loading-row height is reused); iOS
+    // resets cleanly but Android doesn't.
+    function _scrollSheetToTop(overlay) {
+      const body = overlay && overlay.querySelector('.ai-sheet-body');
+      if (!body) return;
+      // Run on next frame so the new content has been laid out.
+      requestAnimationFrame(function () {
+        body.scrollTop = 0;
+        // Belt-and-braces — Android sometimes ignores the first attempt if
+        // the layout is still settling.
+        setTimeout(function () { body.scrollTop = 0; }, 50);
+      });
+    }
+
     function fillAiSheet(overlay, text) {
       const body = overlay.querySelector('.ai-sheet-body');
       body.innerHTML = '<div class="ai-sheet-content">' + formatAiResponse(text) + '</div>';
+      _scrollSheetToTop(overlay);
     }
     function fillAiSheetError(overlay, msg) {
       const body = overlay.querySelector('.ai-sheet-body');
       body.innerHTML = '<div class="ai-sheet-error">Couldn’t load overview: ' + escapeHtml(msg) + '</div>';
+      _scrollSheetToTop(overlay);
     }
 
     // Light markdown-ish renderer for AI responses. Supports **bold**, bullet
