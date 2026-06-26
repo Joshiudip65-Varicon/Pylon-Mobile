@@ -2477,7 +2477,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v37';
+    const APP_VERSION = 'pylon-mobile-v38';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -6472,6 +6472,7 @@
       accounts: 'pylonMobile.cache.accounts.v1',
       people:   'pylonMobile.cache.people.v1',
       previews: 'pylonMobile.cache.previews.v1',
+      me:       'pylonMobile.cache.me.v1',
     };
     const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h — refresh fires in background anyway
 
@@ -6658,23 +6659,49 @@
       return true;
     }
 
+    // /me caching — state.me is used for the "Me" assignee filter and the
+    // settings page. Caching it lets subsequent launches skip the /me call
+    // entirely (a fresh one runs in background to update).
+    function saveMeCache() { if (state.me) _writeCache(CACHE_KEYS.me, state.me); }
+    function loadMeCache() {
+      const c = _readCache(CACHE_KEYS.me);
+      if (!c) return false;
+      state.me = c;
+      return true;
+    }
+
     // ============ Boot ============
     if (!cfg.apiKey) {
       render();
     } else {
       // Restore caches FIRST so the first paint shows real data instead of a
-      // spinner. The silent loadIssues fired below refreshes the cache in the
-      // background — user sees fresh data within a second or two without ever
-      // staring at a blank loading state.
+      // blank screen. Everything below runs in the background.
       const haveIssues = loadIssuesCache();
       loadAccountsCache();
       loadPeopleCache();
       loadPreviewsCache();
+      loadMeCache();
       if (haveIssues) {
         try { reapplyFilters(); } catch {}
+      } else {
+        // No cache — set the loading flag so renderList shows a spinner
+        // immediately rather than flashing "No issues found" before
+        // loadIssues' first network call fires.
+        state.loading = true;
       }
-      // try /me silently so settings has user info
-      Pylon.me().then(me => { state.me = (me && (me.data || me)) || null; render(); }).catch(() => render());
+      // Render IMMEDIATELY — don't block on /me. Previously this code waited
+      // for Pylon.me() to resolve before calling render(), which meant a 27s
+      // /me request (slow proxy / cold network) left the user staring at a
+      // blank screen for 27s before even seeing the loading spinner.
+      render();
+      // Now fire /me in background. It updates state.me when it resolves and
+      // re-renders — but the inbox is already showing by then.
+      Pylon.me().then(me => {
+        state.me = (me && (me.data || me)) || state.me || null;
+        try { saveMeCache(); } catch {}
+        // Only re-render if something visible depends on /me changing.
+        if (state.view === 'settings') render();
+      }).catch(() => {});
       // Use silent refresh if we already restored data — that's a single API
       // call (first page only) instead of a full pagination, so we don't
       // re-burn the rate-limit budget every cold start.
