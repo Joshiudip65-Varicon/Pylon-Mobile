@@ -1642,6 +1642,103 @@
       .main { padding: 20px; }
     }
 
+    /* ============ Split-pane layout (iPad landscape + laptops) ============
+       Activates at min-width 1000px AND landscape orientation. Excludes:
+        - Phones in any orientation (too narrow)
+        - iPad in portrait (810pt wide < 1000)
+       Includes:
+        - iPad 9th gen / Air in landscape (1080-1180pt)
+        - Any laptop/desktop with a window ≥1000pt wide
+       The pane structure: inbox list on the left (380pt), ticket detail on
+       the right (rest). Both visible simultaneously, matching Apple Mail's
+       master-detail pattern on iPad. */
+    @media (min-width: 1000px) and (orientation: landscape) {
+      .app.is-split {
+        max-width: 100%;
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        grid-template-rows: auto 1fr;
+        grid-template-areas:
+          "header header"
+          "main   main";
+        min-height: 100dvh;
+      }
+      .app.is-split > .header { grid-area: header; }
+      .app.is-split > .main {
+        grid-area: main;
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        padding: 0;
+      }
+      .app.is-split .inbox-pane {
+        border-right: 1px solid var(--border);
+        overflow-y: auto;
+        padding: 16px 14px;
+        max-height: calc(100dvh - var(--header-h) - var(--safe-top));
+      }
+      .app.is-split .detail-pane {
+        overflow-y: auto;
+        padding: 16px 20px 0;
+        max-height: calc(100dvh - var(--header-h) - var(--safe-top));
+        display: flex;
+        flex-direction: column;
+      }
+      /* The detail pane's own back chevron is redundant when the list is
+         always visible — hide it to declutter the header. */
+      .app.is-split #hdrLeft { display: none !important; }
+      /* Bottom nav doesn't apply in split layout — the inbox is always
+         visible. Move equivalent actions to the header or remove. */
+      .app.is-split .bottom-nav { display: none; }
+      .app.is-split.has-nav { padding-bottom: 0; }
+      /* Empty-state card shown in detail pane when no ticket is selected. */
+      .detail-empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: var(--text-muted);
+        padding: 40px 24px;
+        gap: 14px;
+      }
+      .detail-empty .detail-empty-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 20px;
+        background: var(--surface-2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--accent);
+      }
+      .detail-empty .detail-empty-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      /* Inbox cards in split view: tighter so we fit more on screen, and a
+         selected state when their issue is the one currently in the right pane. */
+      .app.is-split .issue-card[aria-current="true"] {
+        background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+        border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+      }
+      /* Composer in split mode: stickies to its pane bottom, not viewport. */
+      .app.is-split .composer {
+        position: sticky;
+        bottom: 0;
+        background: var(--bg);
+        margin-left: -20px;
+        margin-right: -20px;
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+    }
+    /* Single-pane (mobile/portrait): the .detail-pane and .inbox-pane wrappers
+       still exist in the DOM in split-aware renders, but we don't want both
+       visible. The renderer only injects one or the other in single mode, so
+       no extra rules needed here. */
+
     /* ============ Pylon-style refinements ============ */
     .header { background: color-mix(in srgb, var(--bg) 78%, transparent); }
 
@@ -2380,7 +2477,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v35';
+    const APP_VERSION = 'pylon-mobile-v36';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -2887,13 +2984,101 @@
         hdrRight.hidden = true;
       }
 
+      // Apply split-pane class to .app so the CSS media query can do its thing.
+      // The class flips on for landscape ≥1000pt, off otherwise — including
+      // single-pane modes (settings/netlog/signature).
+      const splitEligible = isSplitLayout() &&
+        (state.view === 'list' || state.view === 'detail');
+      document.querySelector('.app').classList.toggle('is-split', splitEligible);
+
       // Body
       if (!cfg.apiKey) return renderSetup();
+      // Split-pane: render BOTH the inbox and the detail at once.
+      if (splitEligible) return renderSplitView();
+      // Single-pane: existing behaviour — only one view fills the screen.
       if (state.view === 'list') return renderList();
       if (state.view === 'detail') return renderDetail();
       if (state.view === 'settings') return renderSettings();
       if (state.view === 'netlog') return renderNetLog();
       if (state.view === 'signature') return renderSignature();
+    }
+
+    // True when the viewport is wide and landscape — iPad in landscape, or
+    // any laptop/desktop window ≥1000pt wide. We don't enable split for
+    // phones in landscape (≤956pt) because the panes would be too cramped.
+    function isSplitLayout() {
+      try {
+        return window.matchMedia('(min-width: 1000px) and (orientation: landscape)').matches;
+      } catch { return false; }
+    }
+
+    // Track the layout's "is split" state and re-render whenever it changes —
+    // rotating the iPad, resizing a desktop window, or unfolding a foldable.
+    let _lastSplitState = isSplitLayout();
+    function _onLayoutMaybeChanged() {
+      const now = isSplitLayout();
+      if (now === _lastSplitState) return;
+      _lastSplitState = now;
+      // Don't tear down a user's in-progress reply on rotation — preserve
+      // composer content if the editor element is in the DOM.
+      const editorBeforeRender = document.getElementById('replyEditor');
+      const draftHtml = editorBeforeRender ? editorBeforeRender.innerHTML : null;
+      try { render(); } catch {}
+      // Restore composer draft if there was one.
+      if (draftHtml) {
+        const editorAfterRender = document.getElementById('replyEditor');
+        if (editorAfterRender) editorAfterRender.innerHTML = draftHtml;
+      }
+    }
+    if (window.matchMedia) {
+      try {
+        const mql = window.matchMedia('(min-width: 1000px) and (orientation: landscape)');
+        // Modern Safari/Chrome: addEventListener; older: addListener
+        if (mql.addEventListener) mql.addEventListener('change', _onLayoutMaybeChanged);
+        else if (mql.addListener) mql.addListener(_onLayoutMaybeChanged);
+      } catch {}
+    }
+    window.addEventListener('orientationchange', function () {
+      setTimeout(_onLayoutMaybeChanged, 100); // wait for iOS to finish the rotation
+    });
+
+    // Split-pane renderer: inbox list on the left, ticket detail (or empty
+    // state) on the right. Reuses renderList() and renderDetail() by passing
+    // their target containers so all the existing event-wire-up logic still
+    // runs unchanged.
+    function renderSplitView() {
+      main.innerHTML =
+        '<div class="inbox-pane" id="inboxPane"></div>' +
+        '<div class="detail-pane" id="detailPane"></div>';
+      const inboxEl = document.getElementById('inboxPane');
+      const detailEl = document.getElementById('detailPane');
+      // Always render the list in the left pane.
+      renderList(inboxEl);
+      // Right pane: detail when a ticket is selected, empty state otherwise.
+      if (state.issue) {
+        renderDetail(detailEl);
+      } else {
+        detailEl.innerHTML =
+          '<div class="detail-empty">' +
+            '<div class="detail-empty-icon">' +
+              '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M22 12h-6l-2 3h-4l-2-3H2"/>' +
+                '<path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>' +
+              '</svg>' +
+            '</div>' +
+            '<div class="detail-empty-title">Select a ticket from the inbox</div>' +
+            '<div class="small">The conversation will open here.</div>' +
+          '</div>';
+      }
+      // Mark the selected card in the list (if any) so the user can see
+      // which ticket is currently in the right pane.
+      if (state.issue) {
+        const sel = state.issue.id || state.issue.number;
+        if (sel != null) {
+          const card = inboxEl.querySelector('.issue-card[data-id="' + CSS.escape(String(sel)) + '"]');
+          if (card) card.setAttribute('aria-current', 'true');
+        }
+      }
     }
 
     // ============ Views ============
@@ -2997,8 +3182,9 @@
       $key.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
     }
 
-    function renderList() {
-      main.innerHTML = `
+    function renderList(target) {
+      const root = target || main;
+      root.innerHTML = `
         <div class="search">
           <span class="search-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -3068,6 +3254,25 @@
         if (!item) return;
         const id = item.dataset.id;
         const issue = state.issues.find(i => String(i.id) === id || String(i.number) === id);
+        if (isSplitLayout()) {
+          // Split mode: don't full-navigate. Just update the right pane.
+          state.issue = issue || { id };
+          // Reset detail-pane scroll snapshot so the new ticket starts at top.
+          scrollPositions.detail = 0;
+          // Render the right pane only — keep the inbox state intact.
+          const detailEl = document.getElementById('detailPane');
+          if (detailEl) {
+            renderDetail(detailEl);
+            // Highlight the selected card.
+            document.querySelectorAll('.issue-card[aria-current="true"]').forEach(c =>
+              c.removeAttribute('aria-current'));
+            item.setAttribute('aria-current', 'true');
+          }
+          if (state.issue && (state.issue.id || state.issue)) {
+            loadIssueDetail(state.issue.id || state.issue);
+          }
+          return;
+        }
         navigate('detail', { issue: issue || { id } });
       });
       attachBodyObservers();
@@ -3763,13 +3968,14 @@
     }
     function prettyState(s) { return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
 
-    function renderDetail() {
+    function renderDetail(target) {
+      const root = target || main;
       if (state.loading && !state.messages.length) {
-        main.innerHTML = `<div class="state-row"><span class="spinner"></span> Loading issue…</div>`;
+        root.innerHTML = `<div class="state-row"><span class="spinner"></span> Loading issue…</div>`;
         return;
       }
       if (state.error) {
-        main.innerHTML = `<div class="card" style="border-color: var(--danger-soft); background: var(--danger-soft); color: var(--danger);">
+        root.innerHTML = `<div class="card" style="border-color: var(--danger-soft); background: var(--danger-soft); color: var(--danger);">
           <div style="font-weight: 600; margin-bottom: 6px;">Couldn't load this issue</div>
           <div class="small">${escapeHtml(state.error)}</div>
         </div>`;
@@ -3785,7 +3991,7 @@
       const created = issue.created_at;
 
       const stateChips = ['new','waiting_on_you','waiting_on_customer','on_hold','closed'];
-      main.innerHTML = `
+      root.innerHTML = `
         <div class="detail-header">
           <div class="issue-top" style="margin-bottom: 4px;">
             <span class="issue-num">${escapeHtml(num)}</span>
@@ -4887,7 +5093,14 @@
         state.error = friendlyError(e);
       } finally {
         state.loading = false;
-        if (state.view === 'detail') {
+        // Find the right target to render into:
+        //  - Split mode: the detail pane on the right (#detailPane).
+        //  - Single mode + state.view === 'detail': the main element.
+        //  - Otherwise (split layout but no #detailPane yet, or single mode
+        //    where the user navigated away): don't render.
+        const splitDetailEl = isSplitLayout() ? document.getElementById('detailPane') : null;
+        const target = splitDetailEl || (state.view === 'detail' ? main : null);
+        if (target) {
           // Silent refreshes (background poll, foreground-resume, pull-to-refresh)
           // must NOT re-render while the user is mid-reply, or the renderDetail()
           // call wipes the contenteditable and closes the composer.
@@ -4895,7 +5108,7 @@
             // Skip — fresh data is already in state and will surface on the
             // user's next manual interaction (send, navigate, etc.).
           } else {
-            renderDetail();
+            renderDetail(target);
           }
         }
       }
