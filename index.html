@@ -2477,7 +2477,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v36';
+    const APP_VERSION = 'pylon-mobile-v37';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -6492,12 +6492,92 @@
       } catch { return null; }
     }
 
+    // Strip an issue record down to the fields the inbox actually reads.
+    // Pylon's full /issues response includes things like body_html (kilobytes
+    // per ticket), full attachment lists, etc. — none of which are used in
+    // the cards. Trimming before caching cuts the issues cache by ~70%.
+    // When the user opens a ticket, loadIssueDetail() fetches the full record
+    // fresh anyway, so nothing is lost.
+    function _slimIssue(i) {
+      if (!i || typeof i !== 'object') return i;
+      return {
+        id: i.id,
+        number: i.number,
+        title: i.title,
+        subject: i.subject,
+        state: i.state,
+        status: i.status,
+        created_at: i.created_at,
+        updated_at: i.updated_at,
+        // requester/account/contact: keep only id+name+email so cards can show
+        // them and filters still work; drop nested heavy fields.
+        requester: i.requester ? {
+          id: i.requester.id,
+          name: i.requester.name,
+          email: i.requester.email,
+        } : undefined,
+        contact: i.contact ? {
+          id: i.contact.id,
+          name: i.contact.name,
+          email: i.contact.email,
+        } : undefined,
+        account: i.account ? {
+          id: i.account.id,
+          name: i.account.name,
+          title: i.account.title,
+        } : undefined,
+        account_id: i.account_id,
+        requester_id: i.requester_id,
+        assignee_id: i.assignee_id,
+        assignee: i.assignee ? {
+          id: i.assignee.id,
+          name: i.assignee.name,
+          email: i.assignee.email,
+        } : undefined,
+        tags: Array.isArray(i.tags)
+          ? i.tags.map(t => typeof t === 'string' ? t : { name: t.name, id: t.id })
+          : undefined,
+      };
+    }
+
+    // Cap on the serialized cache size. localStorage on iOS is typically
+    // 5MB per origin; we stay well under to leave room for other caches
+    // and avoid edge-case quota errors.
+    const ISSUES_CACHE_MAX_BYTES = 2_500_000; // ~2.5 MB
+
     function saveIssuesCache() {
-      _writeCache(CACHE_KEYS.issues, {
-        issues: state.allIssues,
+      let issues = (state.allIssues || []).map(_slimIssue);
+      let payload = JSON.stringify({
+        issues,
         dateFrom: state.filter.dateFrom,
         dateTo: state.filter.dateTo,
       });
+      // If the payload would exceed our cap, drop oldest issues until it fits.
+      // Issues are sorted newest-first elsewhere; we trim from the tail.
+      let dropped = 0;
+      while (payload.length > ISSUES_CACHE_MAX_BYTES && issues.length > 50) {
+        const trimTo = Math.max(50, Math.floor(issues.length * 0.8));
+        dropped += issues.length - trimTo;
+        issues = issues.slice(0, trimTo);
+        payload = JSON.stringify({
+          issues,
+          dateFrom: state.filter.dateFrom,
+          dateTo: state.filter.dateTo,
+        });
+      }
+      _writeCache(CACHE_KEYS.issues, { issues, dateFrom: state.filter.dateFrom, dateTo: state.filter.dateTo });
+      if (dropped > 0) {
+        // Surface in the net log so the user can see if the cache is being
+        // trimmed. Not a toast — this is informational.
+        try {
+          logCall({
+            method: 'CACHE', path: 'issues',
+            status: 200, ok: true, ms: 0,
+            excerpt: 'trimmed ' + dropped + ' older issues to fit ' +
+              Math.round(ISSUES_CACHE_MAX_BYTES / 1024) + ' KB cap',
+          });
+        } catch {}
+      }
     }
     function loadIssuesCache() {
       const c = _readCache(CACHE_KEYS.issues);
@@ -6509,7 +6589,36 @@
       return true;
     }
 
-    function saveAccountsCache() { _writeCache(CACHE_KEYS.accounts, accountCache.byId); }
+    // Pylon returns ~30-50 fields per account but we only use 4-5 of them in
+    // the UI (account name in cards, domain in filter). Stripping the rest
+    // before caching cuts localStorage usage by ~80% without losing anything
+    // the app actually reads. Pylon doesn't support server-side field
+    // selection so the wire payload is unchanged — this is purely about
+    // what we persist.
+    function _slimAccount(a) {
+      if (!a || typeof a !== 'object') return a;
+      return {
+        id: a.id,
+        name: a.name,
+        title: a.title,
+        display_name: a.display_name,
+        domain: a.domain,
+      };
+    }
+    function _slimContact(c) {
+      if (!c || typeof c !== 'object') return c;
+      return { id: c.id, name: c.name, email: c.email };
+    }
+    function _slimUser(u) {
+      if (!u || typeof u !== 'object') return u;
+      return { id: u.id, name: u.name, email: u.email };
+    }
+
+    function saveAccountsCache() {
+      const slim = {};
+      for (const id in accountCache.byId) slim[id] = _slimAccount(accountCache.byId[id]);
+      _writeCache(CACHE_KEYS.accounts, slim);
+    }
     function loadAccountsCache() {
       const c = _readCache(CACHE_KEYS.accounts);
       if (!c || typeof c !== 'object') return false;
@@ -6519,10 +6628,11 @@
     }
 
     function savePeopleCache() {
-      _writeCache(CACHE_KEYS.people, {
-        users: peopleCache.users,
-        contacts: peopleCache.contacts,
-      });
+      const slimUsers = {};
+      for (const id in peopleCache.users) slimUsers[id] = _slimUser(peopleCache.users[id]);
+      const slimContacts = {};
+      for (const id in peopleCache.contacts) slimContacts[id] = _slimContact(peopleCache.contacts[id]);
+      _writeCache(CACHE_KEYS.people, { users: slimUsers, contacts: slimContacts });
     }
     function loadPeopleCache() {
       const c = _readCache(CACHE_KEYS.people);
