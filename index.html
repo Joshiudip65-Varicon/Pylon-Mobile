@@ -2380,7 +2380,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v34';
+    const APP_VERSION = 'pylon-mobile-v35';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -2567,6 +2567,7 @@
         for (const x of us) {
           if (x && x.id) peopleCache.users[x.id] = x;
         }
+        try { savePeopleCache(); } catch {}
       } catch {}
       try {
         // Paginate contacts the same way we paginate accounts. Pylon caps a
@@ -2591,6 +2592,7 @@
           cursor = next;
           pages++;
         }
+        try { savePeopleCache(); } catch {}
       } catch {}
     }
 
@@ -2623,6 +2625,7 @@
         } catch {} finally {
           accountCache.loaded = true;
           accountCache.loading = null;
+          try { saveAccountsCache(); } catch {}
         }
         return accountCache.byId;
       })();
@@ -3662,6 +3665,16 @@
     const bodyPreviewQueue = [];
     let bodyPreviewInflight = 0;
     const BODY_PREVIEW_MAX_CONCURRENT = 3;
+    // Debounced save of the preview cache to localStorage — coalesces writes
+    // during a burst of new previews into a single localStorage hit.
+    let _previewSaveTimer = null;
+    function _schedulePreviewSave() {
+      if (_previewSaveTimer) return;
+      _previewSaveTimer = setTimeout(() => {
+        _previewSaveTimer = null;
+        try { savePreviewsCache(); } catch {}
+      }, 1500);
+    }
     function enqueueBodyPreview(cardId, card) {
       if (!cardId) return;
       if (issueBodyPreviewCache[cardId]) {
@@ -3694,6 +3707,9 @@
           const preview = htmlToPreview(issue.body_html || issue.body_text || issue.body || '', 160);
           issueBodyPreviewCache[cardId] = preview;
           updateCardPreview(card, preview);
+          // Debounce the localStorage save so we don't write on every preview;
+          // schedule one write after the current burst settles.
+          _schedulePreviewSave();
         }).catch(() => {
           // Silent — preview just stays as "…". The 429 (if any) was already
           // recorded by api() and other paths will back off.
@@ -4613,13 +4629,21 @@
         patchView();
       }
       // Warm people + account caches in the background. Both functions
-      // memoise so this is cheap on subsequent calls.
+      // memoise so this is cheap on subsequent calls (and effectively a
+      // no-op when we've already restored from localStorage).
       const refresh = () => {
         if (state.view !== 'list') return;
         try { reapplyFilters(); } catch { patchView(); }
       };
-      ensurePeopleLoaded().then(refresh);
-      ensureAccountsLoaded().then(refresh);
+      // Stagger the account/contact pagination by 1s so it doesn't compete
+      // with the first issue fetch for the CORS proxy's bandwidth (which
+      // appears to be the bottleneck on slow proxies — multiple parallel
+      // requests sometimes queue for 60-100s each).
+      const _delayBg = peopleCache.loaded && accountCache.loaded ? 0 : 1000;
+      setTimeout(() => {
+        ensurePeopleLoaded().then(refresh);
+        ensureAccountsLoaded().then(refresh);
+      }, _delayBg);
 
       try {
         const fromStr = state.filter.dateFrom || defaultDateWindow().dateFrom;
@@ -4641,6 +4665,7 @@
           const items = extractList(resp);
           mergeIntoAllIssues(items);
           reapplyFilters();
+          try { saveIssuesCache(); } catch {}
           return;
         }
 
@@ -4663,6 +4688,7 @@
         } while (cursor && pages < MAX_PAGES);
         state.allIssues = all;
         reapplyFilters();
+        try { saveIssuesCache(); } catch {}
         return;
       } catch (e) {
         if (!silent) {
@@ -6222,13 +6248,114 @@
     }
     function onLightboxKey(e) { if (e.key === 'Escape') closeLightbox(); }
 
+    // ============ Local cache (localStorage) ============
+    // Persist the heaviest API responses across sessions so the inbox can
+    // render in <100ms on relaunch instead of waiting for slow network
+    // round-trips. The CORS proxy and Pylon itself sometimes take 30-100s
+    // for /contacts and /accounts pages — caching turns that into a one-time
+    // cost per ~day rather than every cold start.
+    const CACHE_KEYS = {
+      issues:   'pylonMobile.cache.issues.v1',
+      accounts: 'pylonMobile.cache.accounts.v1',
+      people:   'pylonMobile.cache.people.v1',
+      previews: 'pylonMobile.cache.previews.v1',
+    };
+    const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h — refresh fires in background anyway
+
+    function _writeCache(key, payload) {
+      try {
+        localStorage.setItem(key, JSON.stringify({ at: Date.now(), data: payload }));
+      } catch {
+        // Quota exceeded / disabled — silent fail.
+      }
+    }
+    function _readCache(key) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || (Date.now() - (parsed.at || 0)) > CACHE_TTL_MS) return null;
+        return parsed.data;
+      } catch { return null; }
+    }
+
+    function saveIssuesCache() {
+      _writeCache(CACHE_KEYS.issues, {
+        issues: state.allIssues,
+        dateFrom: state.filter.dateFrom,
+        dateTo: state.filter.dateTo,
+      });
+    }
+    function loadIssuesCache() {
+      const c = _readCache(CACHE_KEYS.issues);
+      if (!c || !Array.isArray(c.issues) || !c.issues.length) return false;
+      // Only use if the date window matches the current filter, otherwise the
+      // user would see issues that don't belong in their window.
+      if (c.dateFrom !== state.filter.dateFrom || c.dateTo !== state.filter.dateTo) return false;
+      state.allIssues = c.issues;
+      return true;
+    }
+
+    function saveAccountsCache() { _writeCache(CACHE_KEYS.accounts, accountCache.byId); }
+    function loadAccountsCache() {
+      const c = _readCache(CACHE_KEYS.accounts);
+      if (!c || typeof c !== 'object') return false;
+      accountCache.byId = c;
+      accountCache.loaded = true;
+      return true;
+    }
+
+    function savePeopleCache() {
+      _writeCache(CACHE_KEYS.people, {
+        users: peopleCache.users,
+        contacts: peopleCache.contacts,
+      });
+    }
+    function loadPeopleCache() {
+      const c = _readCache(CACHE_KEYS.people);
+      if (!c) return false;
+      peopleCache.users = c.users || {};
+      peopleCache.contacts = c.contacts || {};
+      peopleCache.loaded = true;
+      return true;
+    }
+
+    function savePreviewsCache() {
+      // issueBodyPreviewCache can be large; trim oldest entries before saving.
+      const keys = Object.keys(issueBodyPreviewCache || {});
+      const trimmed = {};
+      // Save at most the last 500 previews — bounded localStorage usage.
+      for (const k of keys.slice(-500)) trimmed[k] = issueBodyPreviewCache[k];
+      _writeCache(CACHE_KEYS.previews, trimmed);
+    }
+    function loadPreviewsCache() {
+      const c = _readCache(CACHE_KEYS.previews);
+      if (!c || typeof c !== 'object') return false;
+      Object.assign(issueBodyPreviewCache, c);
+      return true;
+    }
+
     // ============ Boot ============
     if (!cfg.apiKey) {
       render();
     } else {
-      // try /me silently so settings has user info; then load list
+      // Restore caches FIRST so the first paint shows real data instead of a
+      // spinner. The silent loadIssues fired below refreshes the cache in the
+      // background — user sees fresh data within a second or two without ever
+      // staring at a blank loading state.
+      const haveIssues = loadIssuesCache();
+      loadAccountsCache();
+      loadPeopleCache();
+      loadPreviewsCache();
+      if (haveIssues) {
+        try { reapplyFilters(); } catch {}
+      }
+      // try /me silently so settings has user info
       Pylon.me().then(me => { state.me = (me && (me.data || me)) || null; render(); }).catch(() => render());
-      loadIssues();
+      // Use silent refresh if we already restored data — that's a single API
+      // call (first page only) instead of a full pagination, so we don't
+      // re-burn the rate-limit budget every cold start.
+      loadIssues({ silent: haveIssues });
     }
 
     // ============ PWA: service worker + install handling ============
