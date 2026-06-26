@@ -2477,7 +2477,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v38';
+    const APP_VERSION = 'pylon-mobile-v39';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -2531,18 +2531,38 @@
 
     // ============ API ============
     function apiUrl(path, query) {
-      const base = (cfg.proxy && cfg.proxy.trim()) ? cfg.proxy.replace(/\/$/, '') : cfg.base.replace(/\/$/, '');
-      let url = base + path;
+      const proxy = (cfg.proxy && cfg.proxy.trim()) || '';
+      const directBase = cfg.base.replace(/\/$/, '');
+
+      // Build the query string against the *real* Pylon URL — that's what
+      // gets appended to the proxy regardless of proxy style.
+      let qs = '';
       if (query) {
-        const qs = new URLSearchParams();
+        const params = new URLSearchParams();
         for (const [k, v] of Object.entries(query)) {
           if (v === undefined || v === null || v === '') continue;
-          qs.set(k, v);
+          params.set(k, v);
         }
-        const s = qs.toString();
-        if (s) url += '?' + s;
+        const s = params.toString();
+        if (s) qs = '?' + s;
       }
-      return url;
+      const fullTarget = directBase + path + qs;
+
+      // No proxy → direct call to Pylon (works on iOS Safari pre-iOS 16 with
+      // CORS hooks but typically blocked; users need a proxy on the web).
+      if (!proxy) return fullTarget;
+
+      // Query-param style proxies (corsproxy.io, cors-anywhere with ?url=).
+      // The full target URL is appended as the value of the trailing query
+      // parameter, URL-encoded.
+      if (/\?(?:[a-z_]+=)?$/i.test(proxy)) {
+        return proxy + encodeURIComponent(fullTarget);
+      }
+
+      // Path-prefix proxies (own Cloudflare Worker, cors-anywhere classic,
+      // custom edge functions). Just glue the path on after stripping any
+      // trailing slash on the proxy URL.
+      return proxy.replace(/\/$/, '') + path + qs;
     }
     // Global rate-limit timestamp. When Pylon returns 429 we set this to a
     // point in the future. Background paths (polling, body-preview loader,
