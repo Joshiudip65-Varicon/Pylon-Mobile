@@ -2380,7 +2380,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v33';
+    const APP_VERSION = 'pylon-mobile-v34';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -2447,6 +2447,26 @@
       }
       return url;
     }
+    // Global rate-limit timestamp. When Pylon returns 429 we set this to a
+    // point in the future. Background paths (polling, body-preview loader,
+    // foreground-resume) check it and skip their work until the window
+    // elapses. Honest user-initiated actions still go through — they should
+    // see the 429 toast directly if it happens.
+    // (state._rateLimitedUntil is lazily initialised on the first 429 — until
+    // then `state._rateLimitedUntil` is undefined which compares false.)
+    function isRateLimited() {
+      return Date.now() < (state && state._rateLimitedUntil || 0);
+    }
+    function _rateLimitedToastShown() {
+      // Don't spam toasts — show once per back-off window.
+      const now = Date.now();
+      if ((window._rateLimitedToastAt || 0) > now - 60_000) return;
+      window._rateLimitedToastAt = now;
+      try {
+        toast('Pylon API rate-limited — pausing background refresh for 60s', 'error');
+      } catch {}
+    }
+
     async function api(method, path, { query, body } = {}) {
       if (!cfg.apiKey) throw new Error('Missing API key');
       const url = apiUrl(path, query);
@@ -2468,6 +2488,13 @@
         ms: Date.now() - started,
         excerpt: text ? text.slice(0, 600) : '',
       });
+      if (res.status === 429) {
+        // Pylon's docs say most endpoints are 20-30 req/min. When we hit the
+        // limit, back off for 60s so polling + body-preview loader + AI
+        // search etc. don't keep hammering and worsening things.
+        state._rateLimitedUntil = Date.now() + 60_000;
+        _rateLimitedToastShown();
+      }
       if (!res.ok) {
         // Surface Pylon's actual error message verbatim
         const inner = data && (data.error || data.message || (data.errors && JSON.stringify(data.errors))) || text || '';
@@ -3629,6 +3656,55 @@
       return text.length > max ? text.slice(0, max).trim() + '…' : text;
     }
 
+    // Queue-based body preview loader so 20 cards becoming visible at once
+    // can't fire 20 simultaneous Pylon.getIssue calls (a fast way to blow
+    // through the API rate limit on first inbox load).
+    const bodyPreviewQueue = [];
+    let bodyPreviewInflight = 0;
+    const BODY_PREVIEW_MAX_CONCURRENT = 3;
+    function enqueueBodyPreview(cardId, card) {
+      if (!cardId) return;
+      if (issueBodyPreviewCache[cardId]) {
+        updateCardPreview(card, issueBodyPreviewCache[cardId]);
+        return;
+      }
+      bodyPreviewQueue.push({ cardId, card });
+      pumpBodyPreviewQueue();
+    }
+    function pumpBodyPreviewQueue() {
+      while (
+        bodyPreviewInflight < BODY_PREVIEW_MAX_CONCURRENT &&
+        bodyPreviewQueue.length
+      ) {
+        // If we're rate-limited, drain the queue (the previews are nice-to-
+        // have, not critical) and let the next user interaction retrigger
+        // the observer.
+        if (isRateLimited()) {
+          bodyPreviewQueue.length = 0;
+          return;
+        }
+        const { cardId, card } = bodyPreviewQueue.shift();
+        if (!cardId || !card || issueBodyPreviewCache[cardId]) {
+          if (card) updateCardPreview(card, issueBodyPreviewCache[cardId] || '');
+          continue;
+        }
+        bodyPreviewInflight += 1;
+        Pylon.getIssue(cardId).then(r => {
+          const issue = (r && (r.data || r.issue || r)) || {};
+          const preview = htmlToPreview(issue.body_html || issue.body_text || issue.body || '', 160);
+          issueBodyPreviewCache[cardId] = preview;
+          updateCardPreview(card, preview);
+        }).catch(() => {
+          // Silent — preview just stays as "…". The 429 (if any) was already
+          // recorded by api() and other paths will back off.
+        }).finally(() => {
+          bodyPreviewInflight -= 1;
+          // Continue draining whenever an in-flight call settles.
+          pumpBodyPreviewQueue();
+        });
+      }
+    }
+
     function attachBodyObservers() {
       if (bodyObserver) {
         try { bodyObserver.disconnect(); } catch {}
@@ -3640,19 +3716,7 @@
           const card = entry.target;
           const cardId = card.dataset.id;
           bodyObserver.unobserve(card);
-          if (!cardId || issueBodyPreviewCache[cardId]) {
-            updateCardPreview(card, issueBodyPreviewCache[cardId] || '');
-            continue;
-          }
-          // Fetch issue body (single request per card)
-          Pylon.getIssue(cardId).then(r => {
-            const issue = (r && (r.data || r.issue || r)) || {};
-            const preview = htmlToPreview(issue.body_html || issue.body_text || issue.body || '', 160);
-            issueBodyPreviewCache[cardId] = preview;
-            updateCardPreview(card, preview);
-          }).catch(() => {
-            // Silent — preview just stays as "..."
-          });
+          enqueueBodyPreview(cardId, card);
         }
       }, { rootMargin: '300px 0px', threshold: 0.01 });
       // Observe each rendered card
@@ -4508,37 +4572,58 @@
 
     // ============ Data loading ============
 
+    // Merge a fresh page of issues into state.allIssues, keyed by id. Newer
+    // records overwrite older ones with the same id; never drops anything we
+    // had before. Used by silent refreshes so they don't blow away existing
+    // data when only a single page is fetched.
+    function mergeIntoAllIssues(items) {
+      if (!items || !items.length) return;
+      const keyOf = (i) => String(i.id || i.number || '');
+      const map = new Map();
+      for (const i of (state.allIssues || [])) {
+        const k = keyOf(i);
+        if (k) map.set(k, i);
+      }
+      for (const i of items) {
+        const k = keyOf(i);
+        if (k) map.set(k, i);
+      }
+      // Sort by created_at desc (newest first) to keep ordering stable.
+      state.allIssues = Array.from(map.values()).sort((a, b) => {
+        const ta = new Date(a.created_at || 0).getTime();
+        const tb = new Date(b.created_at || 0).getTime();
+        return tb - ta;
+      });
+    }
+
     async function loadIssues({ silent } = {}) {
-      // Silent loads (pull-to-refresh, background poll) don't flicker the list
-      // through a loading state — they just swap in fresh data when it arrives.
+      // Skip silent refreshes entirely while we're rate-limited so we don't
+      // re-trigger the 429.
+      if (silent && isRateLimited()) return;
+
+      // Silent loads (pull-to-refresh, background poll, foreground resume)
+      // don't flicker the list and only fetch the FIRST PAGE — that's the
+      // newest 100 issues. Full pagination is reserved for user-initiated
+      // first loads. Result: a single API call per silent refresh instead
+      // of ~10-30. Pylon's 20 req/min budget no longer evaporates on every
+      // tab switch.
       if (!silent) {
         state.loading = true;
         state.error = null;
         patchView();
       }
-      // Warm people + account caches so we can show names/avatars. Both run
-      // in the background while issues load up front. When each one finishes,
-      // recompute filter stats so the Account + Requester pickers re-resolve
-      // entries that initially fell back to placeholder labels — and refresh
-      // the list so account/requester names appear in the cards too.
+      // Warm people + account caches in the background. Both functions
+      // memoise so this is cheap on subsequent calls.
       const refresh = () => {
         if (state.view !== 'list') return;
-        // reapplyFilters() rebuilds state.accountStats + state.requesterStats
-        // from the now-warmer caches, then calls patchView() to re-render.
         try { reapplyFilters(); } catch { patchView(); }
       };
       ensurePeopleLoaded().then(refresh);
       ensureAccountsLoaded().then(refresh);
+
       try {
-        // Pylon /issues requires a start_time/end_time window (RFC3339).
-        // The window is user-controlled via the date-range filter (chip in the
-        // filter bar opens a picker). Default is last 90 days; user can pick
-        // any window. We paginate through with cursor to collect all issues
-        // in that window — not just the first 100.
         const fromStr = state.filter.dateFrom || defaultDateWindow().dateFrom;
         const toStr   = state.filter.dateTo   || defaultDateWindow().dateTo;
-        // dateFrom is inclusive start-of-day; dateTo is inclusive end-of-day
-        // (add one day so 2026-06-01 covers all of June 1st).
         const start = new Date(fromStr + 'T00:00:00');
         const endIncl = new Date(toStr + 'T00:00:00');
         const end = new Date(endIncl.getTime() + 24 * 60 * 60 * 1000);
@@ -4547,6 +4632,19 @@
           end_time: end.toISOString(),
           limit: 100,
         };
+
+        if (silent) {
+          // First page only. Merge into existing state so older tickets we
+          // already loaded aren't lost just because they didn't appear in
+          // this slice.
+          const resp = await Pylon.listIssues(baseQuery);
+          const items = extractList(resp);
+          mergeIntoAllIssues(items);
+          reapplyFilters();
+          return;
+        }
+
+        // Non-silent (user-initiated first load): full pagination.
         let all = [];
         let cursor = null;
         let pages = 0;
@@ -4556,10 +4654,8 @@
           const resp = await Pylon.listIssues(q);
           const items = extractList(resp);
           all = all.concat(items);
-          // Update progressive count so the "All N" chip reflects fetched-so-far
           state.allIssues = all;
-          if (pages === 0) reapplyFilters(); // show first page immediately
-          // Look for cursor in common shapes: pagination.cursor + has_next_page
+          if (pages === 0) reapplyFilters();
           const pg = resp && (resp.pagination || resp.meta || resp);
           const hasNext = pg && (pg.has_next_page === true || (pg.next_cursor && pg.has_next_page !== false));
           cursor = hasNext ? (pg.cursor || pg.next_cursor || null) : null;
@@ -4569,14 +4665,20 @@
         reapplyFilters();
         return;
       } catch (e) {
-        state.allIssues = [];
-        state.issues = [];
-        state.stateCounts = {};
-        state.assigneeStats = [];
-        state.error = friendlyError(e);
+        if (!silent) {
+          state.allIssues = [];
+          state.issues = [];
+          state.stateCounts = {};
+          state.assigneeStats = [];
+          state.error = friendlyError(e);
+        }
+        // Silent failures don't wipe data — just log via the api() call's
+        // own error handler.
       } finally {
-        state.loading = false;
-        patchView();
+        if (!silent) {
+          state.loading = false;
+          patchView();
+        }
       }
     }
 
@@ -6410,9 +6512,11 @@
           if (document.visibilityState !== 'visible') return;
           if (refreshing) return;
           if (!cfg.apiKey) return;
-          // Never poll while the user is mid-reply — even though loadIssueDetail
-          // now skips its re-render in that case, avoiding the API call entirely
-          // is cleaner and saves rate-limit budget.
+          // Skip polling while rate-limited — we already busted our budget,
+          // hitting Pylon again would just refresh the 429 window.
+          if (isRateLimited()) return;
+          // Never poll while the user is mid-reply — avoiding the API call
+          // saves rate-limit budget and avoids the editor wipe risk.
           if (isComposingActively()) return;
           if (state.view === 'list') {
             loadIssues({ silent: true }).catch(function () {});
@@ -6428,9 +6532,9 @@
       document.addEventListener('visibilitychange', function () {
         if (document.visibilityState === 'visible') {
           startPolling();
-          // Also fire one immediate refresh when the app returns to foreground —
-          // but skip if the user is mid-reply.
-          if (cfg.apiKey && !refreshing && !isComposingActively()) {
+          // Also fire one immediate refresh when the app returns to foreground,
+          // unless rate-limited / composing.
+          if (cfg.apiKey && !refreshing && !isComposingActively() && !isRateLimited()) {
             if (state.view === 'list') loadIssues({ silent: true }).catch(function () {});
             else if (state.view === 'detail' && state.issue && state.issue.id) {
               loadIssueDetail(state.issue.id, { silent: true }).catch(function () {});
