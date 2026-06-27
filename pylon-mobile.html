@@ -681,6 +681,127 @@
       color: var(--text-faint);
       pointer-events: none;
     }
+    /* ============ Bulk select ============ */
+    /* Selection-mode card visuals: small check circle on the left, accent
+       border + tinted background when selected. */
+    html.is-selection-mode .issue-card {
+      position: relative;
+      padding-left: 50px;
+      cursor: default;
+    }
+    html.is-selection-mode .issue-card::before {
+      content: '';
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--border-strong);
+      border-radius: 50%;
+      background: var(--surface);
+      transition: background-color .12s, border-color .12s;
+    }
+    html.is-selection-mode .issue-card.is-selected {
+      background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+      border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+    }
+    html.is-selection-mode .issue-card.is-selected::before {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    html.is-selection-mode .issue-card.is-selected::after {
+      content: '';
+      position: absolute;
+      left: 19px;
+      top: 50%;
+      transform: translateY(-65%) rotate(45deg);
+      width: 6px;
+      height: 12px;
+      border: solid #fff;
+      border-width: 0 2.5px 2.5px 0;
+    }
+    /* Hide the bottom-nav while in selection mode so it doesn't visually
+       compete with the bulk action bar. */
+    html.is-selection-mode .bottom-nav { display: none; }
+
+    /* Bulk action bar — slides up from the bottom on selection mode entry. */
+    .bulk-action-bar {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      z-index: 30;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 8px 10px max(env(safe-area-inset-bottom, 0px), 12px);
+      background: color-mix(in srgb, var(--surface) 95%, transparent);
+      backdrop-filter: saturate(180%) blur(18px);
+      -webkit-backdrop-filter: saturate(180%) blur(18px);
+      border-top: 1px solid var(--border);
+      transform: translateY(100%);
+      transition: transform .2s ease;
+      box-shadow: 0 -8px 24px rgba(0, 0, 0, .25);
+    }
+    .bulk-action-bar.is-visible { transform: translateY(0); }
+    .bulk-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .bulk-cancel-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--surface-2);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .bulk-cancel-btn:hover { background: var(--border); }
+    .bulk-count {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      flex-shrink: 0;
+      padding: 0 4px;
+    }
+    .bulk-actions {
+      display: flex;
+      gap: 6px;
+      margin-left: auto;
+    }
+    .bulk-action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background-color .12s, transform .08s;
+    }
+    .bulk-action-btn:hover { background: var(--surface); }
+    .bulk-action-btn:active { transform: scale(.96); }
+    .bulk-action-btn.bulk-action-danger {
+      background: color-mix(in srgb, var(--danger) 14%, var(--surface-2));
+      border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+      color: var(--danger);
+    }
+    .bulk-action-btn.bulk-action-danger:hover {
+      background: color-mix(in srgb, var(--danger) 22%, var(--surface-2));
+    }
+    /* On narrow phones, hide the labels next to action icons to fit. */
+    @media (max-width: 380px) {
+      .bulk-action-btn span { display: none; }
+      .bulk-action-btn { padding: 8px 10px; }
+    }
+
     /* AI Search sparkle button inside the search input on the right side. */
     .search-ai-btn {
       position: absolute;
@@ -2477,7 +2598,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v40';
+    const APP_VERSION = 'pylon-mobile-v41';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -3269,9 +3390,16 @@
       });
 
       const list = document.getElementById('listContainer');
+      // Long-press anywhere on a card → enter bulk-select mode + select that card.
+      attachLongPressHandlers(list);
       list.addEventListener('click', (e) => {
         const item = e.target.closest('.issue-card');
         if (!item) return;
+        // In selection mode, taps toggle selection instead of navigating.
+        if (state.selectionMode) {
+          toggleCardSelection(item);
+          return;
+        }
         const id = item.dataset.id;
         const issue = state.issues.find(i => String(i.id) === id || String(i.number) === id);
         if (isSplitLayout()) {
@@ -5548,6 +5676,14 @@
       const retry = document.getElementById('retryBtn');
       if (retry) retry.addEventListener('click', loadIssues);
       attachBodyObservers();
+      // Restore selection highlights after a re-render (background refresh,
+      // filter change, etc. can blow away the .is-selected classes).
+      if (state.selectionMode && state.selectedIssueIds && state.selectedIssueIds.size) {
+        state.selectedIssueIds.forEach(id => {
+          const card = container.querySelector('.issue-card[data-id="' + CSS.escape(String(id)) + '"]');
+          if (card) card.classList.add('is-selected');
+        });
+      }
     }
 
     // ============ Header actions ============
@@ -6343,6 +6479,332 @@
       } catch (e) {
         toast('Delete failed: ' + friendlyError(e), 'error');
       }
+    }
+
+    // ============ Bulk select ============
+    // Long-press a card to enter selection mode; subsequent taps toggle
+    // selection. Bottom action bar offers Delete / Change status / Add tag,
+    // each running serially with a 3.5s pacing delay so we stay under
+    // Pylon's 20/min rate limit. Live progress toast while a batch runs.
+
+    state.selectionMode = false;
+    state.selectedIssueIds = new Set();
+
+    function enterSelectionMode(firstCardId) {
+      state.selectionMode = true;
+      state.selectedIssueIds = new Set();
+      if (firstCardId) state.selectedIssueIds.add(String(firstCardId));
+      document.documentElement.classList.add('is-selection-mode');
+      // Highlight the first-selected card immediately.
+      if (firstCardId) {
+        const card = document.querySelector('.issue-card[data-id="' + CSS.escape(String(firstCardId)) + '"]');
+        if (card) card.classList.add('is-selected');
+      }
+      showBulkActionBar();
+      if (window.__buzz) window.__buzz(15);
+    }
+
+    function exitSelectionMode() {
+      state.selectionMode = false;
+      state.selectedIssueIds = new Set();
+      document.documentElement.classList.remove('is-selection-mode');
+      document.querySelectorAll('.issue-card.is-selected').forEach(c => c.classList.remove('is-selected'));
+      hideBulkActionBar();
+    }
+
+    function toggleCardSelection(card) {
+      const id = card && card.dataset.id;
+      if (!id) return;
+      if (state.selectedIssueIds.has(String(id))) {
+        state.selectedIssueIds.delete(String(id));
+        card.classList.remove('is-selected');
+      } else {
+        state.selectedIssueIds.add(String(id));
+        card.classList.add('is-selected');
+      }
+      updateBulkActionBar();
+      if (state.selectedIssueIds.size === 0) exitSelectionMode();
+    }
+
+    function showBulkActionBar() {
+      if (document.getElementById('bulkActionBar')) return;
+      const bar = document.createElement('div');
+      bar.id = 'bulkActionBar';
+      bar.className = 'bulk-action-bar';
+      bar.innerHTML =
+        '<div class="bulk-bar-row">' +
+          '<button type="button" class="bulk-cancel-btn" id="bulkCancelBtn" aria-label="Cancel selection">' +
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+          '</button>' +
+          '<span class="bulk-count" id="bulkCount">1 selected</span>' +
+          '<div class="bulk-actions">' +
+            '<button type="button" class="bulk-action-btn" id="bulkStatusBtn" title="Change status">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>' +
+              '<span>Status</span>' +
+            '</button>' +
+            '<button type="button" class="bulk-action-btn" id="bulkTagBtn" title="Add tag">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>' +
+              '<span>Tag</span>' +
+            '</button>' +
+            '<button type="button" class="bulk-action-btn bulk-action-danger" id="bulkDeleteBtn" title="Delete selected">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>' +
+              '<span>Delete</span>' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(bar);
+      document.getElementById('bulkCancelBtn').addEventListener('click', exitSelectionMode);
+      document.getElementById('bulkDeleteBtn').addEventListener('click', bulkDeleteSelected);
+      document.getElementById('bulkStatusBtn').addEventListener('click', bulkChangeStatus);
+      document.getElementById('bulkTagBtn').addEventListener('click', bulkAddTag);
+      requestAnimationFrame(() => bar.classList.add('is-visible'));
+      updateBulkActionBar();
+    }
+    function hideBulkActionBar() {
+      const bar = document.getElementById('bulkActionBar');
+      if (!bar) return;
+      bar.classList.remove('is-visible');
+      setTimeout(() => { if (bar.parentNode) bar.parentNode.removeChild(bar); }, 200);
+    }
+    function updateBulkActionBar() {
+      const el = document.getElementById('bulkCount');
+      if (!el) return;
+      const n = state.selectedIssueIds.size;
+      el.textContent = n + ' selected';
+    }
+
+    // Long-press detection on inbox cards. touchstart starts a 500ms timer;
+    // if the user lifts or moves more than ~10px before it fires, the press
+    // is cancelled (treated as a tap). When the timer fires, selection mode
+    // activates and the pressed card is selected.
+    function attachLongPressHandlers(container) {
+      if (!container) return;
+      let timer = null;
+      let startX = 0, startY = 0;
+      let activated = false;
+      container.addEventListener('touchstart', (e) => {
+        const card = e.target.closest('.issue-card');
+        if (!card) return;
+        if (state.selectionMode) return; // already in selection mode — taps handle toggle
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        activated = false;
+        timer = setTimeout(() => {
+          activated = true;
+          enterSelectionMode(card.dataset.id);
+          timer = null;
+        }, 500);
+      }, { passive: true });
+      container.addEventListener('touchmove', (e) => {
+        if (!timer) return;
+        const dx = Math.abs(e.touches[0].clientX - startX);
+        const dy = Math.abs(e.touches[0].clientY - startY);
+        if (dx > 10 || dy > 10) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      }, { passive: true });
+      container.addEventListener('touchend', () => {
+        if (timer) { clearTimeout(timer); timer = null; }
+      });
+      container.addEventListener('touchcancel', () => {
+        if (timer) { clearTimeout(timer); timer = null; }
+      });
+    }
+
+    // Paced batch operation runner. Used by all three bulk actions.
+    // ids: array of issue id/number strings
+    // label: progress prefix ('Deleting' / 'Updating' / 'Tagging')
+    // operation: async fn called per id; throws on failure
+    async function runBatchOperation(ids, label, operation) {
+      const total = ids.length;
+      if (!total) return { done: 0, failed: 0 };
+      const DELAY_MS = 3500; // ~17/min, safely under Pylon's 20/min limit
+      let done = 0, failed = 0;
+      const show = () => {
+        const msg = label + ' ' + (done + failed) + '/' + total +
+          (failed ? ' (' + failed + ' failed)' : '');
+        try { toast(msg, failed && !done ? 'error' : 'success'); } catch {}
+      };
+      show();
+      for (let i = 0; i < ids.length; i++) {
+        try {
+          await operation(ids[i]);
+          done++;
+        } catch (e) {
+          failed++;
+          if (e && e.status === 429) {
+            // Wait out the rate-limit window before continuing.
+            await new Promise(r => setTimeout(r, 60_000));
+          }
+        }
+        show();
+        if (i < ids.length - 1) {
+          await new Promise(r => setTimeout(r, DELAY_MS));
+        }
+      }
+      const finalMsg = label + ' done: ' + done + ' succeeded' +
+        (failed ? ', ' + failed + ' failed' : '');
+      try { toast(finalMsg, failed ? 'error' : 'success'); } catch {}
+      return { done, failed };
+    }
+
+    // ---------- Bulk Delete ----------
+    async function bulkDeleteSelected() {
+      const ids = Array.from(state.selectedIssueIds);
+      const count = ids.length;
+      if (!count) return;
+      const ok = await confirmAction({
+        title: 'Delete ' + count + ' ticket' + (count === 1 ? '' : 's') + '?',
+        message: 'Permanently deletes ' + count + ' ticket' + (count === 1 ? '' : 's') +
+          ' from Pylon. This cannot be undone.\n\n' +
+          'At Pylon\'s rate limit this will take about ' + Math.ceil(count * 3.5) + ' seconds.',
+        confirmLabel: 'Delete ' + count,
+        danger: true,
+      });
+      if (!ok) return;
+      await runBatchOperation(ids, 'Deleting', async (id) => {
+        await Pylon.deleteIssue(id);
+        const match = (i) => String(i.id || i.number) === String(id);
+        state.allIssues = state.allIssues.filter(i => !match(i));
+        state.issues = state.issues.filter(i => !match(i));
+      });
+      exitSelectionMode();
+      try { reapplyFilters(); saveIssuesCache(); } catch {}
+    }
+
+    // ---------- Bulk Change Status ----------
+    function bulkChangeStatus() {
+      const count = state.selectedIssueIds.size;
+      if (!count) return;
+      const statuses = [
+        { value: 'new', label: 'New' },
+        { value: 'waiting_on_you', label: 'Waiting on you' },
+        { value: 'waiting_on_customer', label: 'Waiting on customer' },
+        { value: 'on_hold', label: 'On hold' },
+        { value: 'closed', label: 'Closed' },
+      ];
+      const overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML =
+        '<div class="confirm-modal filter-sheet" role="dialog">' +
+          '<h3>Change status for ' + count + ' ticket' + (count === 1 ? '' : 's') + '</h3>' +
+          '<p class="date-hint">Roughly ' + Math.ceil(count * 3.5) + 's at Pylon\'s rate limit.</p>' +
+          '<ul class="filter-list">' +
+            statuses.map(s =>
+              '<li><button type="button" class="filter-row-btn" data-status="' + s.value + '">' +
+                '<span class="filter-row-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>' +
+                '<span class="filter-row-label">' + escapeHtml(s.label) + '</span>' +
+              '</button></li>'
+            ).join('') +
+          '</ul>' +
+          '<div class="confirm-actions">' +
+            '<button type="button" class="confirm-cancel" data-action="cancel">Cancel</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add('is-open'));
+      const close = () => {
+        overlay.classList.remove('is-open');
+        setTimeout(() => overlay.remove(), 160);
+      };
+      overlay.querySelector('[data-action="cancel"]').addEventListener('click', close);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+      overlay.querySelectorAll('.filter-row-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const target = btn.dataset.status;
+          close();
+          const ids = Array.from(state.selectedIssueIds);
+          await runBatchOperation(ids, 'Updating status', async (id) => {
+            await Pylon.updateIssue(id, { state: target });
+            const issue = state.allIssues.find(i => String(i.id || i.number) === String(id));
+            if (issue) issue.state = target;
+          });
+          exitSelectionMode();
+          try { reapplyFilters(); saveIssuesCache(); } catch {}
+        });
+      });
+    }
+
+    // ---------- Bulk Add Tag ----------
+    async function bulkAddTag() {
+      const count = state.selectedIssueIds.size;
+      if (!count) return;
+      // Make sure the tag list is loaded so the picker has options.
+      try { await ensureTagsLoaded(); } catch {}
+      const existing = Array.isArray(tagCache.tags) ? tagCache.tags : [];
+
+      const overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML =
+        '<div class="confirm-modal filter-sheet" role="dialog">' +
+          '<h3>Add tag to ' + count + ' ticket' + (count === 1 ? '' : 's') + '</h3>' +
+          '<p class="date-hint">Roughly ' + Math.ceil(count * 3.5) + 's at Pylon\'s rate limit.</p>' +
+          '<input type="search" class="filter-search" id="bulkTagSearch" placeholder="Pick or type a new tag…" autocomplete="off"/>' +
+          '<ul class="filter-list" id="bulkTagList">' +
+            existing.map(t => {
+              const name = tagNameOf(t) || '';
+              return '<li><button type="button" class="filter-row-btn" data-tag="' + escapeAttr(name) + '">' +
+                '<span class="filter-row-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>' +
+                '<span class="filter-row-label">' + escapeHtml(name) + '</span>' +
+              '</button></li>';
+            }).join('') +
+          '</ul>' +
+          '<div class="confirm-actions">' +
+            '<button type="button" class="confirm-cancel" data-action="cancel">Cancel</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add('is-open'));
+      const $search = overlay.querySelector('#bulkTagSearch');
+      const $list = overlay.querySelector('#bulkTagList');
+      const close = () => {
+        overlay.classList.remove('is-open');
+        setTimeout(() => overlay.remove(), 160);
+      };
+      overlay.querySelector('[data-action="cancel"]').addEventListener('click', close);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+      // Filter list as user types; also show a "Create new tag" row if the
+      // typed value doesn't match an existing tag.
+      $search.addEventListener('input', () => {
+        const q = $search.value.trim().toLowerCase();
+        const filtered = !q ? existing : existing.filter(t =>
+          (tagNameOf(t) || '').toLowerCase().includes(q));
+        const matchesExact = filtered.some(t => (tagNameOf(t) || '').toLowerCase() === q);
+        $list.innerHTML = filtered.map(t => {
+          const name = tagNameOf(t) || '';
+          return '<li><button type="button" class="filter-row-btn" data-tag="' + escapeAttr(name) + '">' +
+            '<span class="filter-row-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>' +
+            '<span class="filter-row-label">' + escapeHtml(name) + '</span>' +
+          '</button></li>';
+        }).join('') + (q && !matchesExact
+          ? '<li><button type="button" class="filter-row-btn" data-tag="' + escapeAttr($search.value.trim()) + '" data-new="1">' +
+              '<span class="filter-row-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>' +
+              '<span class="filter-row-label">Create new tag &ldquo;' + escapeHtml($search.value.trim()) + '&rdquo;</span>' +
+            '</button></li>'
+          : '');
+      });
+
+      $list.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.filter-row-btn');
+        if (!btn) return;
+        const tagName = btn.dataset.tag;
+        if (!tagName) return;
+        close();
+        const ids = Array.from(state.selectedIssueIds);
+        await runBatchOperation(ids, 'Tagging', async (id) => {
+          const issue = state.allIssues.find(i => String(i.id || i.number) === String(id));
+          const tags = Array.isArray(issue && issue.tags) ? issue.tags : [];
+          const names = tags.map(t => typeof t === 'string' ? t : (t && (t.name || t.value || t.label))).filter(Boolean);
+          if (names.includes(tagName)) return; // already tagged
+          names.push(tagName);
+          await Pylon.updateIssue(id, { tags: names });
+          if (issue) issue.tags = names.slice();
+        });
+        exitSelectionMode();
+        try { reapplyFilters(); saveIssuesCache(); } catch {}
+      });
     }
 
     // ============ Image lightbox ============
