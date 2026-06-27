@@ -2669,7 +2669,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v44';
+    const APP_VERSION = 'pylon-mobile-v45';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -5104,63 +5104,97 @@
 
     function renderDeepLinkHelp() {
       const appUrl = location.origin + location.pathname.replace(/[^/]*$/, '');
-      // Strip the trailing index.html if present so the URL is the cleanest form.
       const cleanAppUrl = appUrl.replace(/index\.html\/?$/, '');
       const exampleUrl = cleanAppUrl + '?issueNumber=12345';
-      const testUrl = cleanAppUrl + '?issueNumber=99999';
-      main.innerHTML = `
-        <div class="stack-16">
+      // Detect the user's likely platform so we can put the relevant section
+      // on top. We default to iOS-first since that's what Udip uses.
+      const ua = navigator.userAgent || '';
+      const isAndroid = /Android/i.test(ua);
+      const ios = `
           <div class="card">
-            <div style="font-weight: 700; font-size: 17px; margin-bottom: 8px;">Open Pylon links from chat</div>
-            <p class="small muted" style="margin: 0 0 8px; line-height: 1.5;">
-              iOS won't let any app — including this PWA — claim ownership of <code style="font-family: ui-monospace, Menlo, monospace; opacity: .85;">app.usepylon.com</code> links, because Apple only allows that when you own the destination domain. The workaround: an iOS Shortcut that grabs the ticket number from a Pylon URL and re-opens it here.
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom: 6px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.03-2.95 2.41-4.37 2.52-4.44-1.37-2-3.5-2.28-4.27-2.31-1.82-.19-3.55 1.07-4.47 1.07-.94 0-2.34-1.05-3.85-1.02-1.98.03-3.81 1.15-4.83 2.91-2.06 3.58-.53 8.87 1.49 11.78.98 1.42 2.16 3.02 3.7 2.96 1.49-.06 2.05-.96 3.85-.96 1.78 0 2.31.96 3.88.93 1.6-.03 2.62-1.45 3.6-2.88 1.13-1.65 1.6-3.25 1.63-3.34-.03-.02-3.13-1.2-3.16-4.7zM14.1 4.21c.82-.99 1.37-2.37 1.22-3.74-1.18.05-2.6.79-3.45 1.78-.76.87-1.43 2.27-1.25 3.62 1.32.1 2.66-.67 3.48-1.66z"/></svg>
+              <span style="font-weight: 700; font-size: 17px;">On iPhone / iPad</span>
+            </div>
+            <p class="small muted" style="margin: 0 0 10px; line-height: 1.5;">
+              Apple won't let any PWA — or any third-party app — claim ownership of <code style="font-family: ui-monospace, Menlo, monospace; opacity: .85;">app.usepylon.com</code> links, because they only allow that for owners of the destination domain. Workaround: one iOS Shortcut.
             </p>
-            <p class="small muted" style="margin: 0; line-height: 1.5;">
-              Once set up, long-press any Pylon link in Google Chat / Slack / Mail → tap <strong>Share</strong> → tap <strong>Open in Pylon</strong> — the ticket loads in this app within a second.
+            <p class="small" style="margin: 0; line-height: 1.5;">
+              Once set up: long-press any Pylon link → <strong>Share</strong> → tap <strong>Open in Pylon</strong> → ticket loads here.
             </p>
           </div>
 
           <div class="card">
-            <div class="label">Your PWA URL</div>
+            <div class="label">Your PWA URL (you'll paste this in step 3)</div>
             <div class="row" style="gap: 8px; align-items: center; margin-top: 6px;">
               <code style="flex: 1; font-family: ui-monospace, Menlo, monospace; font-size: 12px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; word-break: break-all; line-height: 1.4;">${escapeHtml(cleanAppUrl)}</code>
               <button class="btn" id="copyAppUrl" type="button" style="white-space: nowrap;">Copy</button>
             </div>
-            <p class="tiny faint" style="margin: 8px 0 0;">You'll paste this into the Shortcut in step 3 below.</p>
           </div>
 
           <div class="card">
-            <div class="label" style="margin-bottom: 8px;">Build the Shortcut (one-time, ~3 minutes)</div>
+            <div class="label" style="margin-bottom: 8px;">Build the iOS Shortcut (one-time, ~3 minutes)</div>
             <ol style="margin: 0; padding-left: 20px; line-height: 1.6; font-size: 14px;">
-              <li>Open the <strong>Shortcuts</strong> app on your iPhone / iPad.</li>
-              <li>Tap <strong>+</strong> (top-right) to create a new shortcut. Tap the title at the top and rename it to <strong>Open in Pylon</strong>.</li>
-              <li>Tap <strong>Add Action</strong>. Search for and add: <em>URL</em>. In the URL field, paste:
+              <li>Open the <strong>Shortcuts</strong> app. Tap <strong>+</strong> (top-right). Tap the title and rename it to <strong>Open in Pylon</strong>.</li>
+              <li>Tap <strong>Add Action</strong>. Search and add <em>URL</em>. In the URL field, paste:
                 <div style="margin: 6px 0;"><code style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; padding: 6px 8px; background: var(--surface-2); border-radius: 6px; word-break: break-all; display: inline-block;">${escapeHtml(cleanAppUrl)}?issueNumber=</code></div>
               </li>
-              <li>Add action: <em>Get Text from Input</em>. (This reads the Pylon URL the user is sharing.)</li>
-              <li>Add action: <em>Match Text</em>. Set the pattern to:
+              <li>Add action: <em>Get Text from Input</em>.</li>
+              <li>Add action: <em>Match Text</em>. Pattern:
                 <div style="margin: 6px 0;"><code style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; padding: 6px 8px; background: var(--surface-2); border-radius: 6px;">issueNumber=([0-9]+)</code></div>
-                Then tap the variable chip and switch it from <strong>Matches</strong> to <strong>Groups</strong> → <strong>Group 1</strong>.
+                Tap the variable chip and switch <strong>Matches</strong> → <strong>Groups</strong> → <strong>Group 1</strong>.
               </li>
-              <li>Add action: <em>Combine Text</em>. Drag the <strong>URL</strong> variable (from step 3) and then the <strong>Group 1</strong> variable into the Combine field, with no separator.</li>
-              <li>Add action: <em>Open URLs</em>. Use the <strong>Combined Text</strong> variable as the input.</li>
-              <li>Tap the settings icon (sliders, top of screen) → <strong>Use as Quick Action</strong> → toggle <strong>Share Sheet</strong> on. Under <strong>Share Sheet Types</strong>, leave only <strong>URLs</strong> checked.</li>
-              <li>Tap <strong>Done</strong>. The Shortcut now appears in the Share sheet whenever you share a URL.</li>
+              <li>Add action: <em>Combine Text</em>. Drag the <strong>URL</strong> variable (step 2) and then <strong>Group 1</strong> in, with no separator.</li>
+              <li>Add action: <em>Open URLs</em>. Input: <strong>Combined Text</strong>.</li>
+              <li>Tap the sliders icon (top) → <strong>Use as Quick Action</strong> → toggle <strong>Share Sheet</strong> on. Under <strong>Share Sheet Types</strong>, leave only <strong>URLs</strong> checked.</li>
+              <li>Done. The Shortcut now appears in the Share sheet for any URL.</li>
             </ol>
+          </div>`;
+
+      const android = `
+          <div class="card">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom: 6px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18a.34.34 0 0 0-.13-.46.34.34 0 0 0-.46.13l-1.86 3.22a11.43 11.43 0 0 0-9.98 0L5.15 5.97a.34.34 0 0 0-.46-.13.34.34 0 0 0-.13.46L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52zM7 15.25a.93.93 0 1 1 0-1.85.93.93 0 0 1 0 1.85zm10 0a.93.93 0 1 1 0-1.85.93.93 0 0 1 0 1.85z"/></svg>
+              <span style="font-weight: 700; font-size: 17px;">On Android</span>
+              <span class="badge" style="margin-left: auto; color: var(--success); border-color: transparent; background: color-mix(in srgb, var(--success) 16%, transparent);">No Shortcut needed</span>
+            </div>
+            <p class="small" style="margin: 0 0 10px; line-height: 1.5;">
+              Android (Chrome) lets installed PWAs register as a system Share Target. This app already declares one — but for Chrome to pick it up you need to <strong>re-install the PWA</strong> after upgrading to v44+.
+            </p>
+            <div class="label" style="margin-top: 4px;">Setup (one-time)</div>
+            <ol style="margin: 6px 0 0; padding-left: 20px; line-height: 1.6; font-size: 14px;">
+              <li>Open Android Settings → Apps → find <strong>Pylon Mobile</strong> → <strong>Uninstall</strong>. (This clears the old manifest cache.)</li>
+              <li>Open the PWA URL in Chrome → ⋮ menu → <strong>Install app</strong> / <strong>Add to Home screen</strong>.</li>
+              <li>Done. From now on: long-press a Pylon link in Google Chat / Slack / Gmail → tap <strong>Share</strong> → tap <strong>Pylon Mobile</strong>. The ticket opens in the PWA.</li>
+            </ol>
+            <p class="tiny faint" style="margin: 10px 0 0; line-height: 1.45;">
+              Your sign-in, signature and cache survive the re-install — they live in <code style="font-family: ui-monospace, Menlo, monospace; opacity: .85;">localStorage</code>, which Chrome keeps per origin.
+            </p>
+          </div>`;
+
+      main.innerHTML = `
+        <div class="stack-16">
+          <div class="card">
+            <div style="font-weight: 700; font-size: 17px; margin-bottom: 8px;">Open Pylon links from chat</div>
+            <p class="small muted" style="margin: 0; line-height: 1.5;">
+              The flow is the same on both platforms — long-press a Pylon link in chat → Share → Pylon — but the setup differs because iOS and Android handle PWA link ownership differently. Pick your platform below.
+            </p>
           </div>
+
+          ${isAndroid ? android + ios : ios + android}
 
           <div class="card">
             <div class="label">Test it</div>
             <p class="small muted" style="margin: 6px 0 8px; line-height: 1.5;">
-              Long-press this link, choose <strong>Share</strong>, scroll down and tap <strong>Open in Pylon</strong>. It should bounce you into this app and (if ticket 99999 exists for you) open it. If not, you'll see a friendly "not in current date range" message — that confirms the wiring works.
+              Long-press this link → <strong>Share</strong> → tap <strong>Open in Pylon</strong> (iOS) or <strong>Pylon Mobile</strong> (Android). The app should open and either land on the ticket or show a "not in current date range" toast.
             </p>
             <a href="https://app.usepylon.com/issues?issueNumber=99999" rel="noopener" style="word-break: break-all; font-family: ui-monospace, Menlo, monospace; font-size: 12px;">https://app.usepylon.com/issues?issueNumber=99999</a>
           </div>
 
           <div class="card">
-            <div class="label">If you'd rather skip the Shortcut</div>
+            <div class="label">Direct-link fallback (works on both platforms + desktop)</div>
             <p class="small muted" style="margin: 6px 0 0; line-height: 1.5;">
-              You can also open any ticket directly by appending <code style="font-family: ui-monospace, Menlo, monospace; opacity: .85;">?issueNumber=12345</code> to the app URL. Example:
+              Skip the Share sheet entirely by hitting:
             </p>
             <code style="display: block; margin-top: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; word-break: break-all; line-height: 1.4;">${escapeHtml(exampleUrl)}</code>
           </div>
@@ -5170,7 +5204,8 @@
           </div>
         </div>
       `;
-      document.getElementById('copyAppUrl').addEventListener('click', async () => {
+      const copyBtn = document.getElementById('copyAppUrl');
+      if (copyBtn) copyBtn.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(cleanAppUrl);
           toast('App URL copied', 'success');
@@ -7542,10 +7577,34 @@
     function parseDeepLink() {
       try {
         const params = new URLSearchParams(location.search);
+
+        // 1) Explicit query forms (used by the iOS Shortcut, by paste-into-
+        //    browser, and by manual links).
         const num = params.get('issueNumber') || params.get('ticket');
         const id = params.get('issue') || params.get('id');
         if (id) return { type: 'id', value: String(id).trim() };
         if (num) return { type: 'number', value: String(num).trim() };
+
+        // 2) Android Web Share Target (manifest "share_target"). When the user
+        //    shares a URL from Google Chat / Slack / etc into the PWA, Chrome
+        //    routes the share to our start_url with these params attached.
+        //    The shared text might be a bare URL or a snippet of chat that
+        //    happens to contain one — handle both.
+        const sharedUrl = params.get('shared_url') || '';
+        const sharedText = params.get('shared_text') || '';
+        const haystack = (sharedUrl + ' ' + sharedText).trim();
+        if (haystack) {
+          // Try issueNumber=N first (Pylon's "Copy link" format).
+          const m1 = haystack.match(/[?&]issueNumber=(\d+)/i);
+          if (m1) return { type: 'number', value: m1[1] };
+          // Then a bare /issues/<UUID> path (older Pylon link style).
+          const m2 = haystack.match(/\/issues\/([0-9a-f-]{8,})/i);
+          if (m2) return { type: 'id', value: m2[1] };
+          // Last resort: someone shared just a ticket number like "#12345"
+          // or "ticket 12345".
+          const m3 = haystack.match(/(?:^|[#\s])(\d{3,8})(?:$|\s)/);
+          if (m3) return { type: 'number', value: m3[1] };
+        }
       } catch {}
       return null;
     }
