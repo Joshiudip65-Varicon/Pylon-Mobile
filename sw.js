@@ -10,17 +10,30 @@
  *    available" prompt and reload when the user is ready.
  */
 
-const VERSION = 'pylon-mobile-v45';
+const VERSION = 'pylon-mobile-v46';
 const SHELL_CACHE = `${VERSION}-shell`;
 
+// NOTE: manifest.json is deliberately NOT in this list. The manifest controls
+// share_target, icons, theme, scope and other things that Chrome/Android read
+// at PWA install time to build the WebAPK. If we cached the manifest, a user
+// reinstalling the PWA would silently get a stale WebAPK built from the OLD
+// manifest — even after we shipped a new version. (This happened in v45 →
+// v46: the share_target field added in v45 wasn't visible to Android because
+// the v44 SW had cached the manifest.) Always serve manifest.json from the
+// network so new manifest fields take effect on the next install.
 const SHELL_ASSETS = [
   './',
   './index.html',
-  './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-180.png',
   './icons/icon.svg',
+];
+
+// Patterns that must always go to network, never to cache. Same logic as
+// NEVER_CACHE_HOSTS but for same-origin paths.
+const NEVER_CACHE_PATHS = [
+  /\/manifest\.json$/,
 ];
 
 // Hosts we should always bypass the cache for (live data)
@@ -71,6 +84,11 @@ self.addEventListener('fetch', (event) => {
 
   // Only handle same-origin and known CDN assets
   if (url.origin !== self.location.origin) return;
+
+  // Same-origin files we must always fetch fresh (manifest.json, etc.)
+  for (const re of NEVER_CACHE_PATHS) {
+    if (re.test(url.pathname)) return;
+  }
 
   // Stale-while-revalidate for the shell + same-origin assets
   event.respondWith(
