@@ -11,16 +11,40 @@ The whole app is **one HTML file** (`pylon-mobile.html`). It stores your Pylon A
 - Open an issue: read the thread, change status, add/remove tags, post a reply with a rich text editor (bold/italic/lists/links).
 - Clean, vibrant UI in light or dark mode. Bottom tab nav for phone use. "Add to Home Screen" friendly.
 
-## For team members rolling this out
+## For team members — install as a mobile app
 
-If your team admin has already deployed this and shared the URL with you, here's the 60-second setup:
+Pylon Mobile is a Progressive Web App (PWA). It installs to your phone's home screen, launches in full-screen with its own icon, and works offline for the app shell. Three minutes start-to-finish:
 
-1. **Get your personal Pylon API key.** Open https://app.usepylon.com in your normal browser, sign in with Google as usual, then go to **Settings → API Keys** (under Developers / Integrations). Click **Create API Key**, give it a name like "My phone", and copy the key (it starts with `pylon_api_`).
-2. **Open the Pylon Mobile URL** your admin shared, on your phone.
-3. **Paste your API key**, expand "Advanced settings" if needed and confirm the CORS proxy URL your admin gave you, and tap **Sign in**.
-4. (iPhone) Tap the share icon → **Add to Home Screen** so it launches like a native app.
+### Step 1 — Get your personal Pylon API key
+
+Open https://app.usepylon.com in your normal browser, sign in with Google as usual, then go to **Settings → API Keys** (under Developers / Integrations). Click **Create API Key**, give it a name like "My phone", and copy the key (it starts with `pylon_api_`).
+
+### Step 2 — Open the URL and sign in
+
+Open the Pylon Mobile URL your admin shared (looks like `https://yourteam.github.io/Pylon-Mobile/`). Paste your API key, confirm the CORS proxy URL in Advanced settings if needed, and tap **Sign in**.
+
+### Step 3 — Install to your home screen
+
+**On iPhone / iPad (Safari only — Chrome on iOS does not support installing):**
+1. Tap the **Share** button (square with up arrow) at the bottom of Safari.
+2. Scroll down and tap **Add to Home Screen**.
+3. Confirm the name "Pylon" and tap **Add**.
+4. Launch from your home screen — no Safari bars, just the app.
+
+**On Android (Chrome):**
+1. Look for the **Install Pylon Mobile** banner at the bottom of the screen — tap **Install**.
+2. Or, tap the ⋮ menu → **Install app** / **Add to Home screen**.
+3. Launch from your app drawer / home screen.
+
+**On desktop (Chrome, Edge):**
+1. Look for the install icon (⊕) on the right side of the address bar.
+2. Click it → **Install**.
 
 That's it. Your key represents your Pylon account, so any reply you post shows up under your name, your "On you" filter shows your tickets, and your avatar appears on messages you send.
+
+### Updates
+
+The app checks for new versions each time you open it. When one's available you'll see a small "A new version is available — Refresh" banner at the bottom — tap it to reload with the latest. No reinstall needed, no app store wait.
 
 ## How to use it
 

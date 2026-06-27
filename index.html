@@ -1808,14 +1808,25 @@
          always visible — hide it to declutter the header. */
       .app.is-split #hdrLeft { display: none !important; }
 
-      /* Collapse the inbox pane to zero width when the user has toggled it
-         off. The detail pane fluidly takes the full row. */
+      /* Collapse the inbox pane completely so the detail pane fluidly takes
+         the full row. We use a single-column grid here (rather than 0 1fr)
+         because Safari can leave artefacts in the zero-width track when the
+         detail content has its own padding. */
       .app.is-split.list-collapsed > .main {
-        grid-template-columns: 0 1fr;
+        grid-template-columns: 1fr;
       }
       .app.is-split.list-collapsed .inbox-pane {
         display: none;
       }
+      .app.is-split.list-collapsed .detail-pane {
+        width: 100%;
+        max-width: 100%;
+      }
+      /* Clip horizontal overflow inside the inbox pane so filter chips that
+         exceed the pane width get cut off (and are reachable via the row's
+         own horizontal scroll) instead of bleeding into the detail pane. */
+      .app.is-split .inbox-pane { overflow-x: hidden; }
+      .app.is-split .inbox-pane .filter-row { max-width: 100%; }
       /* Collapse button: small chevron-left at the top of the inbox pane.
          Sticky so it stays in view while scrolling the list. */
       .app.is-split .split-collapse-btn {
@@ -2658,7 +2669,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v42';
+    const APP_VERSION = 'pylon-mobile-v43';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -4932,6 +4943,38 @@
           </div>
 
           <div class="list-card">
+            <div class="list-row-header">Advanced</div>
+            ${(() => {
+              const cs = cacheStats();
+              const ageStrs = cs.keys.map(k => k.name + ': ' + (k.bytes ? fmtBytes(k.bytes) + ' · ' + fmtAge(k.age) : 'empty'));
+              return `
+            <div class="list-row" style="cursor: default;">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M12 7v5l3 2"/></svg></span>
+              <span class="body">
+                <span class="l1">Local cache</span>
+                <span class="l2">Total: ${fmtBytes(cs.totalBytes)} · ${cs.keys.filter(k => k.bytes > 0).length} of ${cs.keys.length} populated</span>
+              </span>
+            </div>
+            <div class="list-row" style="cursor: default; padding-top: 0;">
+              <span class="left"></span>
+              <span class="body">
+                <span class="l2" style="white-space: normal; line-height: 1.45; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; opacity: .8;">${escapeHtml(ageStrs.join('  ·  '))}</span>
+              </span>
+            </div>`;
+            })()}
+            <button class="list-row" id="clearCache">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1.5 14a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></span>
+              <span class="body"><span class="l1">Clear cache</span><span class="l2">Wipe local data — keys + AI settings stay</span></span>
+              <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+            <button class="list-row" id="forceColdStart">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
+              <span class="body"><span class="l1">Force cold-start refresh</span><span class="l2">Clear cache + full reload + re-fetch everything</span></span>
+              <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+          </div>
+
+          <div class="list-card">
             <button class="list-row" id="signOut" style="color: var(--danger);">
               <span class="left" style="color: var(--danger);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
               <span class="body"><span class="l1">Sign out</span><span class="l2">Forget API key on this device</span></span>
@@ -4951,6 +4994,20 @@
       document.getElementById('editAiPrompt').addEventListener('click', () => promptAndSave('System prompt (multi-line OK; leave blank for default)', cfg.aiSystemPrompt || '', (v) => { cfg.aiSystemPrompt = v.trim(); saveConfig(); toast(cfg.aiSystemPrompt ? 'System prompt saved' : 'Using default prompt', 'success'); render(); }));
       document.getElementById('editAiModel').addEventListener('click', () => promptAndSave('Groq model (e.g. llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768)', cfg.aiModel || DEFAULT_AI_MODEL, (v) => { cfg.aiModel = v.trim() || DEFAULT_AI_MODEL; saveConfig(); toast('Model saved: ' + cfg.aiModel, 'success'); render(); }));
       document.getElementById('viewNetLog').addEventListener('click', () => { state.view = 'netlog'; render(); });
+      document.getElementById('clearCache').addEventListener('click', () => {
+        if (!confirm('Clear all cached data?\n\nThis wipes cached issues, accounts, contacts and previews from this device. Your API keys, AI settings and signature are kept.\n\nThe next time the app loads it will fetch everything fresh from Pylon.')) return;
+        clearAllCaches();
+        toast('Cache cleared', 'success');
+        // Re-render Settings so the cache-size readout updates.
+        render();
+      });
+      document.getElementById('forceColdStart').addEventListener('click', () => {
+        if (!confirm('Force a full cold-start refresh?\n\nThis clears the local cache and reloads the app. You\'ll see the loading screen and the app will re-fetch issues, accounts and contacts from Pylon. May take 20-40s and could briefly hit Pylon\'s rate limit.')) return;
+        clearAllCaches();
+        toast('Reloading…', 'success');
+        // Tiny delay so the toast and confirm dismissal paint before we reload.
+        setTimeout(() => { try { location.reload(); } catch { window.location = window.location.href; } }, 250);
+      });
       document.getElementById('signOut').addEventListener('click', () => {
         if (!confirm('Sign out and forget your API key on this device?')) return;
         clearConfig();
@@ -7151,6 +7208,57 @@
         if (!parsed || (Date.now() - (parsed.at || 0)) > ttl) return null;
         return parsed.data;
       } catch { return null; }
+    }
+
+    // ============ Cache inspection + clearing ============
+    // Used by Settings → Advanced. Reports total localStorage bytes used by
+    // our cache keys so the user can see whether caches are bloating.
+    function cacheStats() {
+      const out = { keys: [], totalBytes: 0 };
+      for (const [name, key] of Object.entries(CACHE_KEYS)) {
+        let bytes = 0, age = null;
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            bytes = raw.length;
+            try {
+              const parsed = JSON.parse(raw);
+              if (parsed && parsed.at) age = Date.now() - parsed.at;
+            } catch {}
+          }
+        } catch {}
+        out.keys.push({ name, key, bytes, age });
+        out.totalBytes += bytes;
+      }
+      return out;
+    }
+    function clearAllCaches() {
+      for (const key of Object.values(CACHE_KEYS)) {
+        try { localStorage.removeItem(key); } catch {}
+      }
+      // Also nuke in-memory state so the next render is truly cold.
+      state.allIssues = [];
+      state.issues = [];
+      state.accounts = [];
+      state.people = [];
+      try { localStorage.removeItem('pylonMobile.netlog.v1'); } catch {}
+    }
+    function fmtBytes(n) {
+      if (!n) return '0 B';
+      if (n < 1024) return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+      return (n / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+    function fmtAge(ms) {
+      if (ms == null) return 'empty';
+      const s = Math.floor(ms / 1000);
+      if (s < 60) return s + 's ago';
+      const m = Math.floor(s / 60);
+      if (m < 60) return m + 'm ago';
+      const h = Math.floor(m / 60);
+      if (h < 24) return h + 'h ago';
+      const d = Math.floor(h / 24);
+      return d + 'd ago';
     }
 
     // Strip an issue record down to the fields the inbox actually reads.

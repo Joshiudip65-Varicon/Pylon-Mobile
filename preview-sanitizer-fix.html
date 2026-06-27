@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Pylon Mobile — Sanitizer fix preview</title>
+  <style>
+    /* ---- Theme tokens, copied verbatim from index.html so this preview looks ---- */
+    /* ---- identical to the real app in both light and dark mode. ----------------- */
+    :root {
+      --bg: #faf9fc;
+      --bg-gradient: radial-gradient(120% 80% at 50% -10%, #ece8ff 0%, transparent 55%), #faf9fc;
+      --surface: #ffffff;
+      --surface-2: #f3f1f8;
+      --border: #e8e4f0;
+      --border-strong: #d6d0e2;
+      --text: #16121f;
+      --text-muted: #6b6680;
+      --text-faint: #9c98ad;
+      --accent: #6e56cf;
+      --warning: #d97706;
+      --warning-soft: #fef3c7;
+      --radius: 14px;
+      --shadow-1: 0 1px 2px rgba(20,12,40,.04), 0 1px 6px rgba(20,12,40,.06);
+      --font: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0a1c;
+        --bg-gradient: radial-gradient(120% 80% at 50% -10%, #2a1f5c 0%, transparent 60%), #0e0a1c;
+        --surface: #1a1530;
+        --surface-2: #221b3d;
+        --border: #2e2750;
+        --border-strong: #423765;
+        --text: #f3eefc;
+        --text-muted: #aaa2c5;
+        --text-faint: #7a7297;
+        --accent: #8b73f0;
+        --warning: #fbbf24;
+        --warning-soft: rgba(251,191,36,.12);
+      }
+    }
+    html, body { margin: 0; padding: 0; min-height: 100%; }
+    body {
+      background: var(--bg-gradient);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.5;
+      padding: 24px 16px 80px;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 14px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 28px 0 10px; }
+    p.lede { color: var(--text-muted); margin: 0 0 24px; font-size: 14.5px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 640px) { .grid { grid-template-columns: 1fr 1fr; gap: 14px; } }
+    .col-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 6px 2px; }
+    .col-label.bad { color: #e04848; }
+    .col-label.good { color: #1aa66a; }
+
+    /* ---- .msg / .msg-body styling, copied from index.html ---- */
+    .msg {
+      padding: 14px 16px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-1);
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .msg-content { min-width: 0; }
+    .msg-header {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .msg-author { font-weight: 600; color: var(--text); }
+    .msg-time { color: var(--text-faint); font-size: 12px; margin-left: auto; }
+    .msg-body {
+      font-size: 14.5px;
+      line-height: 1.55;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+    }
+    .msg-body img { max-width: 100%; height: auto; border-radius: 8px; }
+    .msg-body p { margin: 0 0 .8em; }
+    .msg-body p:last-child { margin-bottom: 0; }
+    .msg-body blockquote {
+      margin: .6em 0;
+      padding: .2em 0 .2em .8em;
+      border-left: 3px solid var(--border-strong);
+      color: var(--text-muted);
+    }
+    .msg-body .gmail_quote,
+    .msg-body .gmail_attr,
+    .msg-body div[id^="divRplyFwdMsg"] { color: var(--text-muted); }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: #d94343;
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 600;
+      flex-shrink: 0;
+    }
+    .footer-tip {
+      margin-top: 36px;
+      padding: 14px 16px;
+      border-radius: var(--radius);
+      background: var(--surface-2);
+      border: 1px dashed var(--border-strong);
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  </style>
+</head>
+<body>
+  <h1>Sanitizer fix — side-by-side preview</h1>
+  <p class="lede">
+    Left column = current behaviour (inline colours from sender survive).
+    Right column = with the patched <code>sanitizeHtml</code>.
+    This page respects your system theme — flip your OS to dark mode to reproduce the screenshot.
+  </p>
+
+  <div id="cases"></div>
+
+  <div class="footer-tip">
+    The fix lives in <code>sanitizeHtml</code> in <code>index.html</code>. It removes inline
+    <code>color</code>, <code>background</code>, and <code>background-color</code> declarations,
+    plus legacy <code>&lt;font color&gt;</code>/<code>bgcolor</code> attributes. Every other
+    inline style (alignment, font-weight, sizing) is kept intact.
+  </div>
+
+  <script>
+    // ===== The PATCHED sanitizer, mirrored exactly from index.html =====
+    function sanitizeHtml(html) {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = String(html || '');
+      const walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_ELEMENT);
+      const remove = [];
+      let n;
+      while ((n = walker.nextNode())) {
+        const tag = n.tagName.toLowerCase();
+        if (['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta'].includes(tag)) {
+          remove.push(n); continue;
+        }
+        ['color', 'bgcolor', 'text', 'link', 'vlink', 'alink'].forEach(a => n.removeAttribute(a));
+        for (const attr of Array.from(n.attributes)) {
+          const name = attr.name.toLowerCase();
+          const val = (attr.value || '').trim();
+          if (name.startsWith('on')) n.removeAttribute(attr.name);
+          else if ((name === 'href' || name === 'src') && /^javascript:/i.test(val)) n.removeAttribute(attr.name);
+          else if (name === 'style') {
+            const cleaned = val.split(';').map(s => s.trim())
+              .filter(s => s && !/^(color|background|background-color)\s*:/i.test(s))
+              .join('; ');
+            if (cleaned) n.setAttribute('style', cleaned);
+            else n.removeAttribute('style');
+          }
+        }
+        if (tag === 'a' && n.hasAttribute('href')) {
+          n.setAttribute('target', '_blank'); n.setAttribute('rel', 'noopener noreferrer');
+        }
+        if (tag === 'img') n.setAttribute('loading', 'lazy');
+      }
+      remove.forEach(el => el.remove());
+      return tpl.innerHTML;
+    }
+
+    // ===== Realistic email samples that mirror what's breaking in #12136 =====
+    const cases = [
+      {
+        title: 'Outlook desktop — hard black on dark theme (the #12136 bug)',
+        author: 'Millie Maskell',
+        initials: 'MM',
+        time: '10:37',
+        html: `<p style="color:#000000; font-family: Calibri, sans-serif;">Hi Rasik,</p>
+               <p style="color:#000000;">I have been looking through all the settings and I have a few questions to ask if you could help me please.</p>
+               <p style="color:#000000;"><b>Pay Rules</b> - What should be added for our pay rules?</p>
+               <p style="color:#000000;"><b>Pay Items</b> - I assume this is Ordinary time, Time &amp; Half, Double, Travel, annual leave, RDO, sick leave?</p>`
+      },
+      {
+        title: 'Marketing-style email — white text on light theme',
+        author: 'Promo Sender',
+        initials: 'PS',
+        time: 'Mon',
+        html: `<div style="background:#0e0a1c; padding:12px; border-radius:8px;">
+                 <p style="color:#ffffff; font-weight:600;">Heads-up: your invoice is ready.</p>
+                 <p style="color:#cfc7e8;">Open the dashboard to download a copy.</p>
+               </div>`
+      },
+      {
+        title: 'Legacy <font color> — grey signature',
+        author: 'Old Mail Client',
+        initials: 'OM',
+        time: 'Tue',
+        html: `<p>Thanks — speak soon.</p>
+               <p><font color="#888888" face="Arial" size="2">--<br>Sent from my mobile</font></p>`
+      },
+      {
+        title: 'Gmail quoted reply — should look muted, not full-strength',
+        author: 'Customer',
+        initials: 'CU',
+        time: 'Wed',
+        html: `<p>Looks good, thanks!</p>
+               <div class="gmail_quote">
+                 <div class="gmail_attr">On Tue, May 26, 2026 at 4:12 PM Rasik wrote:</div>
+                 <blockquote style="color:#555;">Just confirming the changes are deployed. Let me know if anything looks off.</blockquote>
+               </div>`
+      },
+      {
+        title: 'Mixed alignment + size + colour (alignment must survive, colour must not)',
+        author: 'Mixed Styles',
+        initials: 'MS',
+        time: 'Thu',
+        html: `<p style="text-align:center; color:#aa0000; font-size:18px; font-weight:700;">Important notice</p>
+               <p style="text-align:center; color:#666;">Centered, larger, and bold should remain. Colour should not.</p>`
+      },
+    ];
+
+    const root = document.getElementById('cases');
+    cases.forEach(c => {
+      const section = document.createElement('section');
+      section.innerHTML = `
+        <h2>${c.title}</h2>
+        <div class="grid">
+          <div>
+            <div class="col-label bad">Before (current)</div>
+            <div class="msg">
+              <div class="avatar">${c.initials}</div>
+              <div class="msg-content">
+                <div class="msg-header">
+                  <span class="msg-author">${c.author}</span>
+                  <span class="msg-time">${c.time}</span>
+                </div>
+                <div class="msg-body" data-raw></div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="col-label good">After (patched sanitizer)</div>
+            <div class="msg">
+              <div class="avatar">${c.initials}</div>
+              <div class="msg-content">
+                <div class="msg-header">
+                  <span class="msg-author">${c.author}</span>
+                  <span class="msg-time">${c.time}</span>
+                </div>
+                <div class="msg-body" data-fixed></div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      // Render raw HTML on the left (simulates current bug: colours come through)
+      section.querySelector('[data-raw]').innerHTML = c.html;
+      // Render through patched sanitizer on the right
+      section.querySelector('[data-fixed]').innerHTML = sanitizeHtml(c.html);
+      root.appendChild(section);
+    });
+  </script>
+</body>
+</html>
