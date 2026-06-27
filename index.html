@@ -1807,6 +1807,66 @@
       /* The detail pane's own back chevron is redundant when the list is
          always visible — hide it to declutter the header. */
       .app.is-split #hdrLeft { display: none !important; }
+
+      /* Collapse the inbox pane to zero width when the user has toggled it
+         off. The detail pane fluidly takes the full row. */
+      .app.is-split.list-collapsed > .main {
+        grid-template-columns: 0 1fr;
+      }
+      .app.is-split.list-collapsed .inbox-pane {
+        display: none;
+      }
+      /* Collapse button: small chevron-left at the top of the inbox pane.
+         Sticky so it stays in view while scrolling the list. */
+      .app.is-split .split-collapse-btn {
+        position: sticky;
+        top: 0;
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        margin-bottom: 6px;
+        border-radius: 8px;
+        background: var(--surface-2);
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        cursor: pointer;
+        z-index: 5;
+        float: right;
+      }
+      .app.is-split .split-collapse-btn:hover {
+        background: var(--surface);
+        color: var(--accent);
+      }
+      /* Expand button: floating chevron at the top-left of the detail pane,
+         visible only when the inbox is collapsed. */
+      .split-expand-btn {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--surface) 95%, transparent);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        color: var(--text);
+        border: 1px solid var(--border);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 5;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+      }
+      .app.is-split.list-collapsed .split-expand-btn { display: flex; }
+      .split-expand-btn:hover {
+        background: var(--surface);
+        color: var(--accent);
+      }
+      .app.is-split .detail-pane { position: relative; }
       /* Bottom nav doesn't apply in split layout — the inbox is always
          visible. Move equivalent actions to the header or remove. */
       .app.is-split .bottom-nav { display: none; }
@@ -2598,7 +2658,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v41';
+    const APP_VERSION = 'pylon-mobile-v42';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -2614,6 +2674,7 @@
         const defaults = {
           apiKey: '', base: DEFAULT_BASE, proxy: '', signature: '',
           aiApiKey: '', aiSystemPrompt: '', aiModel: DEFAULT_AI_MODEL,
+          splitListCollapsed: false,
         };
         if (!raw) return defaults;
         const merged = Object.assign(defaults, JSON.parse(raw));
@@ -2634,6 +2695,7 @@
         return {
           apiKey: '', base: DEFAULT_BASE, proxy: '', signature: '',
           aiApiKey: '', aiSystemPrompt: '', aiModel: DEFAULT_AI_MODEL,
+          splitListCollapsed: false,
         };
       }
     }
@@ -3144,6 +3206,15 @@
       if (state.view === 'signature') return renderSignature();
     }
 
+    // Collapse / expand the left inbox pane in split-pane mode. Persists the
+    // user's preference to cfg so it survives reloads.
+    function setSplitListCollapsed(collapsed) {
+      cfg.splitListCollapsed = !!collapsed;
+      try { saveConfig(); } catch {}
+      const app = document.querySelector('.app');
+      if (app) app.classList.toggle('list-collapsed', !!collapsed);
+    }
+
     // True when the viewport is wide and landscape — iPad in landscape, or
     // any laptop/desktop window ≥1000pt wide. We don't enable split for
     // phones in landscape (≤956pt) because the panes would be too cramped.
@@ -3188,13 +3259,46 @@
     // their target containers so all the existing event-wire-up logic still
     // runs unchanged.
     function renderSplitView() {
+      // Apply the saved 'list collapsed' preference so the layout starts in
+      // the user's preferred state.
+      const collapsed = !!cfg.splitListCollapsed;
+      document.querySelector('.app').classList.toggle('list-collapsed', collapsed);
+
       main.innerHTML =
         '<div class="inbox-pane" id="inboxPane"></div>' +
-        '<div class="detail-pane" id="detailPane"></div>';
+        '<div class="detail-pane" id="detailPane">' +
+          // Floating expand button shown only when the inbox pane is collapsed.
+          // Sits in the top-left of the detail pane so the user can re-open
+          // the list without leaving the ticket they're reading.
+          '<button type="button" class="split-expand-btn" id="splitExpandBtn" aria-label="Show inbox" title="Show inbox">' +
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>' +
+            '</svg>' +
+          '</button>' +
+          '<div id="detailPaneContent"></div>' +
+        '</div>';
       const inboxEl = document.getElementById('inboxPane');
-      const detailEl = document.getElementById('detailPane');
+      const detailEl = document.getElementById('detailPaneContent');
       // Always render the list in the left pane.
       renderList(inboxEl);
+      // Wire the floating expand button.
+      const expandBtn = document.getElementById('splitExpandBtn');
+      if (expandBtn) {
+        expandBtn.addEventListener('click', () => setSplitListCollapsed(false));
+      }
+      // Insert a collapse-button at the top of the inbox pane so the user
+      // can hide the list and see the ticket in full width.
+      const collapseBtn = document.createElement('button');
+      collapseBtn.type = 'button';
+      collapseBtn.className = 'split-collapse-btn';
+      collapseBtn.setAttribute('aria-label', 'Hide inbox');
+      collapseBtn.setAttribute('title', 'Hide inbox');
+      collapseBtn.innerHTML =
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<polyline points="15 18 9 12 15 6"/>' +
+        '</svg>';
+      collapseBtn.addEventListener('click', () => setSplitListCollapsed(true));
+      inboxEl.insertBefore(collapseBtn, inboxEl.firstChild);
       // Right pane: detail when a ticket is selected, empty state otherwise.
       if (state.issue) {
         renderDetail(detailEl);
@@ -3408,7 +3512,7 @@
           // Reset detail-pane scroll snapshot so the new ticket starts at top.
           scrollPositions.detail = 0;
           // Render the right pane only — keep the inbox state intact.
-          const detailEl = document.getElementById('detailPane');
+          const detailEl = document.getElementById('detailPaneContent');
           if (detailEl) {
             renderDetail(detailEl);
             // Highlight the selected card.
@@ -3523,6 +3627,13 @@
     // Assignee filter popover — multi-select. Tapping toggles inclusion; the
     // list updates inline. Done dismisses.
     function openAssigneeFilterSheet() {
+      // Lazy-load the user/contact directory on first filter open. If it's
+      // already loaded from cache or a previous open, this is a no-op.
+      if (!peopleCache.loaded) {
+        ensurePeopleLoaded().then(() => {
+          try { reapplyFilters(); } catch {}
+        });
+      }
       const me = state.me || {};
       const meId = me.id || me.user_id;
       const meName = me.name || me.email || 'Me';
@@ -3609,6 +3720,13 @@
     }
 
     function openAccountFilterSheet() {
+      // Lazy-load the accounts directory on first filter open. If it's
+      // already loaded from cache or a previous open, this is a no-op.
+      if (!accountCache.loaded) {
+        ensureAccountsLoaded().then(() => {
+          try { reapplyFilters(); } catch {}
+        });
+      }
       const stats = (state.accountStats || []).slice();
       // Move "No account" bucket to the bottom for tidiness.
       stats.sort((a, b) => (a.id === '__none__') - (b.id === '__none__') || b.count - a.count);
@@ -4118,7 +4236,9 @@
 
     function renderDetail(target) {
       const root = target || main;
-      if (state.loading && !state.messages.length) {
+      // Use the detail-specific loading flag, not state.loading (which is
+      // for the inbox fetch).
+      if ((state.detailLoading || state.loading) && !state.messages.length) {
         root.innerHTML = `<div class="state-row"><span class="spinner"></span> Loading issue…</div>`;
         return;
       }
@@ -4982,22 +5102,17 @@
         state.error = null;
         patchView();
       }
-      // Warm people + account caches in the background. Both functions
-      // memoise so this is cheap on subsequent calls (and effectively a
-      // no-op when we've already restored from localStorage).
-      const refresh = () => {
-        if (state.view !== 'list') return;
+      // Account + contact pagination used to fire here on every loadIssues
+      // call. That cost 5-30 API calls per cold start even though most users
+      // never open the assignee or account filter. Moved to be lazy — those
+      // ensure* functions are now called from openAssigneeFilterSheet and
+      // openAccountFilterSheet only.
+      //
+      // If we've already loaded them in a previous session (cache restored
+      // on boot), refresh card names once now since the cache TTL is 7 days.
+      if (peopleCache.loaded || accountCache.loaded) {
         try { reapplyFilters(); } catch { patchView(); }
-      };
-      // Stagger the account/contact pagination by 1s so it doesn't compete
-      // with the first issue fetch for the CORS proxy's bandwidth (which
-      // appears to be the bottleneck on slow proxies — multiple parallel
-      // requests sometimes queue for 60-100s each).
-      const _delayBg = peopleCache.loaded && accountCache.loaded ? 0 : 1000;
-      setTimeout(() => {
-        ensurePeopleLoaded().then(refresh);
-        ensureAccountsLoaded().then(refresh);
-      }, _delayBg);
+      }
 
       try {
         const fromStr = state.filter.dateFrom || defaultDateWindow().dateFrom;
@@ -5253,7 +5368,25 @@
     }
 
     async function loadIssueDetail(id, { silent } = {}) {
-      if (!silent) { state.loading = true; state.error = null; state.messages = []; render(); }
+      // Use a SEPARATE loading flag for the detail view so we don't trigger
+      // the inbox's bottom-of-list "Loading…" indicator while opening a
+      // ticket. Bug noticed in split-pane mode: tapping a ticket showed a
+      // spinner at the bottom of the inbox list as well as inside the
+      // detail pane. state.loading is for inbox-fetch; state.detailLoading
+      // is for ticket-fetch.
+      if (!silent) {
+        state.detailLoading = true;
+        state.error = null;
+        state.messages = [];
+        // In split mode, render just the detail pane so the inbox isn't
+        // touched. In single mode, re-render the whole view normally.
+        if (isSplitLayout()) {
+          const detailEl = document.getElementById('detailPaneContent');
+          if (detailEl) renderDetail(detailEl);
+        } else {
+          render();
+        }
+      }
       // Fire people-loading in the background — it's only used to label authors.
       ensurePeopleLoaded();
       try {
@@ -5273,13 +5406,13 @@
       } catch (e) {
         state.error = friendlyError(e);
       } finally {
-        state.loading = false;
+        state.detailLoading = false;
         // Find the right target to render into:
         //  - Split mode: the detail pane on the right (#detailPane).
         //  - Single mode + state.view === 'detail': the main element.
         //  - Otherwise (split layout but no #detailPane yet, or single mode
         //    where the user navigated away): don't render.
-        const splitDetailEl = isSplitLayout() ? document.getElementById('detailPane') : null;
+        const splitDetailEl = isSplitLayout() ? document.getElementById('detailPaneContent') : null;
         const target = splitDetailEl || (state.view === 'detail' ? main : null);
         if (target) {
           // Silent refreshes (background poll, foreground-resume, pull-to-refresh)
@@ -6989,7 +7122,18 @@
       previews: 'pylonMobile.cache.previews.v1',
       me:       'pylonMobile.cache.me.v1',
     };
-    const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h — refresh fires in background anyway
+    // Per-cache TTL. Accounts, contacts and /me change rarely (you don't add
+    // new customers every day), so we let them live for a week between forced
+    // refreshes. Issues and body previews change constantly so they're 24h.
+    const CACHE_TTL_DAY = 24 * 60 * 60 * 1000;
+    const CACHE_TTL_WEEK = 7 * 24 * 60 * 60 * 1000;
+    const CACHE_TTL_BY_KEY = {
+      [CACHE_KEYS.issues]:   CACHE_TTL_DAY,
+      [CACHE_KEYS.accounts]: CACHE_TTL_WEEK,
+      [CACHE_KEYS.people]:   CACHE_TTL_WEEK,
+      [CACHE_KEYS.me]:       CACHE_TTL_WEEK,
+      [CACHE_KEYS.previews]: CACHE_TTL_DAY,
+    };
 
     function _writeCache(key, payload) {
       try {
@@ -7003,7 +7147,8 @@
         const raw = localStorage.getItem(key);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
-        if (!parsed || (Date.now() - (parsed.at || 0)) > CACHE_TTL_MS) return null;
+        const ttl = CACHE_TTL_BY_KEY[key] || CACHE_TTL_DAY;
+        if (!parsed || (Date.now() - (parsed.at || 0)) > ttl) return null;
         return parsed.data;
       } catch { return null; }
     }
