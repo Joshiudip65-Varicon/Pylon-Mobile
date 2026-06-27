@@ -10,7 +10,7 @@
  *    available" prompt and reload when the user is ready.
  */
 
-const VERSION = 'pylon-mobile-v48';
+const VERSION = 'pylon-mobile-v49';
 const SHELL_CACHE = `${VERSION}-shell`;
 
 // NOTE: manifest.json is deliberately NOT in this list. The manifest controls

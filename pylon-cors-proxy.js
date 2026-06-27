@@ -22,7 +22,16 @@
  *     lock it down.
  */
 
-const PYLON_BASE = 'https://api.usepylon.com';
+// Upstream routing. The Worker forwards to multiple Pylon hosts based on
+// the path prefix:
+//   /kb/<rest>    → varicon.help.usepylon.com/<rest>   (knowledge base — for AI Draft)
+//   /kb-sitemap   → varicon.help.usepylon.com/sitemap.xml
+//   anything else → api.usepylon.com/<full-path>        (Pylon API, default)
+//
+// Change UPSTREAM_KB to your own help center subdomain if you're not at
+// varicon.help.usepylon.com.
+const UPSTREAM_API = 'https://api.usepylon.com';
+const UPSTREAM_KB  = 'https://varicon.help.usepylon.com';
 
 // Lock this down to the origin(s) where you host the HTML file.
 // Examples:
@@ -53,9 +62,20 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
 
-    // Forward path + query verbatim to Pylon
+    // Choose upstream based on path prefix.
     const url = new URL(request.url);
-    const upstream = PYLON_BASE + url.pathname + url.search;
+    let upstream;
+    if (url.pathname === '/kb-sitemap' || url.pathname === '/kb-sitemap.xml') {
+      // Convenience alias for the help center sitemap (the most-requested file).
+      upstream = UPSTREAM_KB + '/sitemap.xml' + url.search;
+    } else if (url.pathname.startsWith('/kb/')) {
+      // /kb/articles/123-foo → https://varicon.help.usepylon.com/articles/123-foo
+      const rest = url.pathname.slice('/kb'.length); // keeps leading "/"
+      upstream = UPSTREAM_KB + rest + url.search;
+    } else {
+      // Default: forward to the Pylon API verbatim.
+      upstream = UPSTREAM_API + url.pathname + url.search;
+    }
 
     // Pass through everything except hop-by-hop headers
     const fwdHeaders = new Headers();

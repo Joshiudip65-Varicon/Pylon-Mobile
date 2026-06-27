@@ -2669,7 +2669,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v48';
+    const APP_VERSION = 'pylon-mobile-v49';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -2684,7 +2684,8 @@
         const raw = localStorage.getItem(STORAGE_KEY);
         const defaults = {
           apiKey: '', base: DEFAULT_BASE, proxy: '', signature: '',
-          aiApiKey: '', aiSystemPrompt: '', aiModel: DEFAULT_AI_MODEL,
+          aiApiKey: '', aiSystemPrompt: '', aiDraftPrompt: '', aiModel: DEFAULT_AI_MODEL,
+          kbUrl: 'https://varicon.help.usepylon.com',
           splitListCollapsed: false,
         };
         if (!raw) return defaults;
@@ -2705,7 +2706,8 @@
       } catch {
         return {
           apiKey: '', base: DEFAULT_BASE, proxy: '', signature: '',
-          aiApiKey: '', aiSystemPrompt: '', aiModel: DEFAULT_AI_MODEL,
+          aiApiKey: '', aiSystemPrompt: '', aiDraftPrompt: '', aiModel: DEFAULT_AI_MODEL,
+          kbUrl: 'https://varicon.help.usepylon.com',
           splitListCollapsed: false,
         };
       }
@@ -2720,7 +2722,9 @@
       cfg.proxy = '';
       cfg.aiApiKey = '';
       cfg.aiSystemPrompt = '';
+      cfg.aiDraftPrompt = '';
       cfg.aiModel = DEFAULT_AI_MODEL;
+      cfg.kbUrl = 'https://varicon.help.usepylon.com';
     }
 
     // ============ API ============
@@ -4362,7 +4366,7 @@
                 <span id="threadPickerLabel">Default thread</span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6;"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
-              <button type="button" class="composer-ai" id="aiRefineBtn" title="Refine with AI" aria-label="Refine draft with AI">
+              <button type="button" class="composer-ai" id="aiRefineBtn" title="Draft reply with AI (reads the full ticket + Varicon help center)" aria-label="Draft reply with AI">
                 <svg class="ai-sparkle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 3l1.8 4.5L18 9l-4.2 1.5L12 15l-1.8-4.5L6 9l4.2-1.5L12 3z"/>
                   <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z"/>
@@ -4409,7 +4413,7 @@
       const $editor = document.getElementById('replyEditor');
       const $send = document.getElementById('sendReply');
       const $aiRefine = document.getElementById('aiRefineBtn');
-      if ($aiRefine) $aiRefine.addEventListener('click', refineDraftWithAi);
+      if ($aiRefine) $aiRefine.addEventListener('click', draftReplyWithAi);
       const $toggle = document.getElementById('internalToggle');
       const $check = document.getElementById('internalCheck');
       const $internalLabel = document.getElementById('internalLabel');
@@ -4921,15 +4925,20 @@
           </div>
 
           <div class="list-card">
-            <div class="list-row-header">AI assist (Groq — free tier)</div>
+            <div class="list-row-header">AI Draft (Groq + Varicon help center)</div>
             <button class="list-row" id="editAiKey">
               <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
               <span class="body"><span class="l1">Groq API key</span><span class="l2">${escapeHtml(cfg.aiApiKey ? cfg.aiApiKey.slice(0, 6) + '••••••' + cfg.aiApiKey.slice(-4) : 'Not set — free key at console.groq.com')}</span></span>
               <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
             </button>
-            <button class="list-row" id="editAiPrompt">
+            <button class="list-row" id="editKbUrl">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+              <span class="body"><span class="l1">Knowledge base URL</span><span class="l2">${escapeHtml(cfg.kbUrl || 'https://varicon.help.usepylon.com')}</span></span>
+              <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+            <button class="list-row" id="editAiDraftPrompt">
               <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
-              <span class="body"><span class="l1">System prompt</span><span class="l2">${escapeHtml((cfg.aiSystemPrompt || DEFAULT_AI_PROMPT).slice(0, 60) + ((cfg.aiSystemPrompt || DEFAULT_AI_PROMPT).length > 60 ? '…' : ''))}</span></span>
+              <span class="body"><span class="l1">Draft system prompt</span><span class="l2">${escapeHtml((cfg.aiDraftPrompt || DEFAULT_AI_DRAFT_PROMPT).slice(0, 60) + ((cfg.aiDraftPrompt || DEFAULT_AI_DRAFT_PROMPT).length > 60 ? '…' : ''))}</span></span>
               <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
             </button>
             <button class="list-row" id="editAiModel">
@@ -5004,7 +5013,17 @@
       document.getElementById('editProxy').addEventListener('click', () => promptAndSave('CORS proxy URL (leave blank for direct)', cfg.proxy || '', (v) => { cfg.proxy = v.trim(); saveConfig(); toast(cfg.proxy ? 'Proxy enabled' : 'Proxy cleared', 'success'); render(); }));
       document.getElementById('editSignature').addEventListener('click', () => { state.view = 'signature'; render(); });
       document.getElementById('editAiKey').addEventListener('click', () => promptAndSave('Groq API key (free at console.groq.com → API Keys)', '', (v) => { cfg.aiApiKey = v.trim(); saveConfig(); toast(cfg.aiApiKey ? 'AI key saved' : 'AI key cleared', 'success'); render(); }));
-      document.getElementById('editAiPrompt').addEventListener('click', () => promptAndSave('System prompt (multi-line OK; leave blank for default)', cfg.aiSystemPrompt || '', (v) => { cfg.aiSystemPrompt = v.trim(); saveConfig(); toast(cfg.aiSystemPrompt ? 'System prompt saved' : 'Using default prompt', 'success'); render(); }));
+      document.getElementById('editKbUrl').addEventListener('click', () => promptAndSave('Knowledge base URL (Varicon help center)', cfg.kbUrl || 'https://varicon.help.usepylon.com', (v) => {
+        cfg.kbUrl = v.trim() || 'https://varicon.help.usepylon.com';
+        saveConfig();
+        // Wipe the sitemap cache so the new URL is fetched on next AI Draft.
+        try { localStorage.removeItem(KB_CACHE_KEY); } catch {}
+        try { localStorage.removeItem(KB_ARTICLE_CACHE_KEY); } catch {}
+        _kbState = { articles: [], loaded: false, loadingPromise: null };
+        toast('Knowledge base URL saved', 'success');
+        render();
+      }));
+      document.getElementById('editAiDraftPrompt').addEventListener('click', () => promptAndSave('AI Draft system prompt (multi-line OK; leave blank for default)', cfg.aiDraftPrompt || '', (v) => { cfg.aiDraftPrompt = v.trim(); saveConfig(); toast(cfg.aiDraftPrompt ? 'Draft prompt saved' : 'Using default draft prompt', 'success'); render(); }));
       document.getElementById('editAiModel').addEventListener('click', () => promptAndSave('Groq model (e.g. llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768)', cfg.aiModel || DEFAULT_AI_MODEL, (v) => { cfg.aiModel = v.trim() || DEFAULT_AI_MODEL; saveConfig(); toast('Model saved: ' + cfg.aiModel, 'success'); render(); }));
       document.getElementById('viewNetLog').addEventListener('click', () => { state.view = 'netlog'; render(); });
       document.getElementById('openDeepLinkHelp').addEventListener('click', () => { state.view = 'deeplink-help'; render(); });
@@ -6399,6 +6418,198 @@
       } catch { return String(html || ''); }
     }
 
+    // ============ Knowledge Base (Varicon help center) ============
+    // For AI Draft. We fetch the help center sitemap, keyword-match articles
+    // against the ticket subject + latest customer message, then fetch the
+    // top 2-3 article bodies to give Groq actual answer text to paraphrase.
+    //
+    // CORS: varicon.help.usepylon.com doesn't send CORS headers, so we
+    // route through the user's existing Cloudflare proxy using the new
+    // /kb/ path prefix (added in pylon-cors-proxy.js v2). If the user
+    // hasn't updated their proxy, KB fetches will 404 — AI Draft still
+    // works, just without KB context.
+    const KB_DEFAULT_URL = 'https://varicon.help.usepylon.com';
+    const KB_CACHE_KEY = 'pylonMobile.cache.kb.v1';
+    const KB_ARTICLE_CACHE_KEY = 'pylonMobile.cache.kbArticles.v1';
+    const KB_CACHE_TTL_LOCAL = 7 * 24 * 60 * 60 * 1000; // 7 days for sitemap
+
+    let _kbState = { articles: [], loaded: false, loadingPromise: null };
+
+    // Build the URL we'll actually fetch. If the user's proxy is configured,
+    // we go through it via /kb/...; otherwise we fall back to a direct fetch
+    // (which will almost certainly fail with CORS, but we try).
+    function kbUrl(path) {
+      const proxy = (cfg.proxy && cfg.proxy.trim()) || '';
+      if (proxy) {
+        // Replace the proxy's natural base with the /kb path prefix.
+        const p = proxy.replace(/\/$/, '');
+        return p + '/kb' + (path.startsWith('/') ? path : '/' + path);
+      }
+      const base = (cfg.kbUrl || KB_DEFAULT_URL).replace(/\/$/, '');
+      return base + (path.startsWith('/') ? path : '/' + path);
+    }
+
+    function _kbWriteSitemapCache(articles) {
+      try {
+        localStorage.setItem(KB_CACHE_KEY, JSON.stringify({
+          at: Date.now(),
+          articles,
+        }));
+      } catch {}
+    }
+    function _kbReadSitemapCache() {
+      try {
+        const raw = localStorage.getItem(KB_CACHE_KEY);
+        if (!raw) return null;
+        const p = JSON.parse(raw);
+        if (!p || (Date.now() - (p.at || 0)) > KB_CACHE_TTL_LOCAL) return null;
+        return p.articles || [];
+      } catch { return null; }
+    }
+    function _kbReadArticleCache(url) {
+      try {
+        const raw = localStorage.getItem(KB_ARTICLE_CACHE_KEY);
+        if (!raw) return null;
+        const map = JSON.parse(raw);
+        if (!map || !map[url]) return null;
+        if ((Date.now() - (map[url].at || 0)) > KB_CACHE_TTL_LOCAL) return null;
+        return map[url].body;
+      } catch { return null; }
+    }
+    function _kbWriteArticleCache(url, body) {
+      try {
+        const raw = localStorage.getItem(KB_ARTICLE_CACHE_KEY);
+        const map = raw ? JSON.parse(raw) : {};
+        map[url] = { at: Date.now(), body };
+        // Cap at 60 entries (oldest evicted). Each entry ~1.5KB max.
+        const keys = Object.keys(map);
+        if (keys.length > 60) {
+          keys.sort((a, b) => (map[a].at || 0) - (map[b].at || 0));
+          for (const k of keys.slice(0, keys.length - 60)) delete map[k];
+        }
+        localStorage.setItem(KB_ARTICLE_CACHE_KEY, JSON.stringify(map));
+      } catch {}
+    }
+
+    // Parse a Pylon help-center sitemap.xml into [{ url, title }] entries.
+    // Pylon's sitemap lists <url><loc>...</loc></url> for every article URL.
+    // We derive a human title from the URL slug since the sitemap doesn't
+    // expose article titles directly.
+    function parseKbSitemap(xml) {
+      const articles = [];
+      const re = /<loc>\s*([^<]+)\s*<\/loc>/g;
+      let m;
+      while ((m = re.exec(xml)) !== null) {
+        const u = m[1].trim();
+        // Only keep article-like URLs (skip the homepage, category pages).
+        if (!/\/(articles?|posts?|help)\//i.test(u)) continue;
+        // Build a fallback title from the last URL segment.
+        let slug = u.split('/').filter(Boolean).pop() || '';
+        // Strip leading "12345-" id prefixes.
+        slug = slug.replace(/^\d+-/, '').replace(/-/g, ' ').replace(/\.html?$/i, '');
+        const title = slug.charAt(0).toUpperCase() + slug.slice(1);
+        articles.push({ url: u, title });
+      }
+      // Dedupe by URL.
+      const seen = new Set();
+      return articles.filter(a => seen.has(a.url) ? false : (seen.add(a.url), true));
+    }
+
+    async function ensureKbLoaded() {
+      if (_kbState.loaded) return _kbState.articles;
+      if (_kbState.loadingPromise) return _kbState.loadingPromise;
+
+      _kbState.loadingPromise = (async () => {
+        const cached = _kbReadSitemapCache();
+        if (cached) {
+          _kbState.articles = cached;
+          _kbState.loaded = true;
+          return cached;
+        }
+        try {
+          const resp = await fetch(kbUrl('/sitemap.xml'), { headers: { Accept: 'application/xml, text/xml, */*' } });
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const xml = await resp.text();
+          const articles = parseKbSitemap(xml);
+          _kbState.articles = articles;
+          _kbState.loaded = true;
+          _kbWriteSitemapCache(articles);
+          return articles;
+        } catch (e) {
+          // Most likely CORS (user hasn't redeployed their proxy with /kb support).
+          console.warn('KB sitemap fetch failed:', e);
+          _kbState.loaded = true; // Mark as loaded so we don't retry every draft.
+          _kbState.articles = [];
+          return [];
+        } finally {
+          _kbState.loadingPromise = null;
+        }
+      })();
+      return _kbState.loadingPromise;
+    }
+
+    // Simple keyword scorer: title hits count for more than URL hits, longer
+    // words count for more. Good enough to surface "expense" or "claim" or
+    // "subcontractor" articles from a free-text ticket subject.
+    function findRelevantKbArticles(text, max) {
+      max = max || 3;
+      if (!_kbState.articles.length) return [];
+      const q = String(text || '').toLowerCase();
+      // Word-tokenise and drop very short / stopword-ish tokens.
+      const STOP = new Set(['this','that','with','from','have','need','want','will','your','they','them','what','when','where','which','about','please','help','dont','wont','cant','isnt','arent','because','their','there','should','would','could','some','only','also','than','then','these','those','onto','into','very','just','been']);
+      const words = Array.from(new Set(
+        q.split(/[^a-z0-9]+/i).filter(w => w.length > 3 && !STOP.has(w))
+      ));
+      if (!words.length) return [];
+      const scored = _kbState.articles.map(a => {
+        const titleLower = (a.title || '').toLowerCase();
+        const urlLower = (a.url || '').toLowerCase();
+        let score = 0;
+        for (const w of words) {
+          if (titleLower.includes(w)) score += w.length;
+          if (urlLower.includes(w)) score += Math.floor(w.length / 2);
+        }
+        return Object.assign({ score }, a);
+      });
+      return scored
+        .filter(a => a.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, max);
+    }
+
+    // Fetch + extract plain-text body of an article URL. Returns up to
+    // ~2000 chars to keep token usage reasonable.
+    async function fetchKbArticleBody(articleUrl, maxChars) {
+      maxChars = maxChars || 2000;
+      const cached = _kbReadArticleCache(articleUrl);
+      if (cached != null) return cached;
+      try {
+        // Translate the absolute article URL into a path the proxy can route.
+        // articleUrl might be like https://varicon.help.usepylon.com/articles/123-foo
+        // → we want /articles/123-foo. The kbUrl() helper prepends /kb.
+        let path;
+        try {
+          const u = new URL(articleUrl);
+          path = u.pathname + u.search;
+        } catch { path = articleUrl; }
+        const resp = await fetch(kbUrl(path));
+        if (!resp.ok) return '';
+        const html = await resp.text();
+        // Strip <script>, <style>, <header>, <nav>, <footer> before extracting.
+        const cleaned = html
+          .replace(/<script[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[\s\S]*?<\/style>/gi, '')
+          .replace(/<(header|nav|footer|aside)[\s\S]*?<\/\1>/gi, '');
+        let text = htmlToPlainText(cleaned);
+        text = text.replace(/\s+/g, ' ').trim();
+        if (text.length > maxChars) text = text.slice(0, maxChars) + '…';
+        _kbWriteArticleCache(articleUrl, text);
+        return text;
+      } catch (e) {
+        return '';
+      }
+    }
+
     // Build the system prompt: configured prompt (or default) + ticket context.
     function buildAiSystemPrompt(issue, recentMsgs) {
       const base = (cfg.aiSystemPrompt && cfg.aiSystemPrompt.trim()) || DEFAULT_AI_PROMPT;
@@ -6467,6 +6678,140 @@
         throw new Error('Groq returned no text (' + reason + ')');
       }
       return out.trim();
+    }
+
+    // System prompt used by AI Draft. Distinct from DEFAULT_AI_PROMPT, which
+    // was tuned for the old "refine my draft" mode.
+    const DEFAULT_AI_DRAFT_PROMPT =
+      "You are a senior customer support specialist at Varicon — construction project management software. " +
+      "Your task: read the support ticket below, including the full conversation history and any knowledge-base excerpts provided, " +
+      "and draft a friendly, professional, accurate reply to the customer's latest message.\n\n" +
+      "Rules:\n" +
+      "- Be specific. You ARE Varicon support — never write 'please contact support'.\n" +
+      "- If the KB excerpts cover the question, paraphrase the relevant steps. Don't link to articles unless the answer truly requires multi-step instructions the user should bookmark.\n" +
+      "- If the customer's question needs more info (account name, screenshot, exact error wording, project ID, etc.), ask precisely what you need.\n" +
+      "- Match the customer's level of formality. Avoid being preachy or padding the reply.\n" +
+      "- Don't add a sign-off (no 'Cheers, Udip' or 'Best regards') — the user's signature is appended automatically by Pylon.\n" +
+      "- Don't add a greeting like 'Hi <name>' on a multi-message thread — just dive in. On a first reply, start with a short 'Hi —' or similar.\n" +
+      "- Return ONLY the reply body. No subject line, no markdown headings, no quoted ticket history.";
+
+    // AI Draft: read the full thread, pull relevant KB articles, draft a reply.
+    // The editor's current content (if any) is treated as a user hint about
+    // what the agent intends to say.
+    async function draftReplyWithAi() {
+      const editor = document.getElementById('replyEditor');
+      if (!editor) return;
+      if (!cfg.aiApiKey) { toast('Add your Groq API key in Settings → AI assist', 'error'); return; }
+      if (!state.issue) { toast('Open a ticket first', 'error'); return; }
+
+      const btn = document.getElementById('aiRefineBtn');
+      if (btn) { btn.disabled = true; btn.classList.add('is-loading'); }
+
+      try {
+        const hint = (editor.textContent || '').trim();
+        const messages = Array.isArray(state.messages) ? state.messages : [];
+
+        // Find the latest customer-authored message — that's what we're
+        // primarily replying to. Falls back to ticket subject if no messages.
+        let latestCustomerText = '';
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const m = messages[i];
+          const isCustomer = m.from_customer === true || m.author_type === 'contact';
+          if (isCustomer) {
+            latestCustomerText = htmlToPlainText(m.body_html ?? m.html_body ?? m.message_html ?? m.body_text ?? m.body ?? '');
+            if (latestCustomerText) break;
+          }
+        }
+        const subjectText = state.issue.title || state.issue.subject || '';
+        const searchQuery = (subjectText + '\n' + latestCustomerText).trim();
+
+        // Kick off KB sitemap load + article fetches in parallel with no UI block.
+        // ensureKbLoaded() is cached so subsequent calls are instant.
+        let kbContext = '';
+        let kbStatus = '';
+        try {
+          await ensureKbLoaded();
+          const relevant = findRelevantKbArticles(searchQuery, 3);
+          if (relevant.length) {
+            // Fetch top 3 article bodies in parallel.
+            const bodies = await Promise.all(
+              relevant.map(a => fetchKbArticleBody(a.url).then(body => ({ ...a, body })))
+            );
+            const parts = [];
+            for (const a of bodies) {
+              if (!a.body) continue;
+              parts.push('— Article: ' + a.title);
+              parts.push('  URL: ' + a.url);
+              parts.push('  Content: ' + a.body);
+              parts.push('');
+            }
+            if (parts.length) {
+              kbContext = parts.join('\n');
+              kbStatus = relevant.length + ' KB article' + (relevant.length === 1 ? '' : 's');
+            }
+          }
+        } catch (e) {
+          console.warn('KB lookup failed (continuing without KB):', e);
+        }
+
+        // Build the system prompt.
+        const baseSystem = (cfg.aiDraftPrompt && cfg.aiDraftPrompt.trim()) || DEFAULT_AI_DRAFT_PROMPT;
+        const sysParts = [baseSystem, ''];
+        sysParts.push('=== TICKET ===');
+        if (state.issue.number != null) sysParts.push('Number: #' + state.issue.number);
+        if (subjectText) sysParts.push('Subject: ' + subjectText);
+        const acctName = (state.issue.account && (state.issue.account.name || state.issue.account.title)) || '';
+        if (acctName) sysParts.push('Account: ' + acctName);
+        const reqName = (state.issue.requester && (state.issue.requester.name || state.issue.requester.email)) || '';
+        if (reqName) sysParts.push('Customer: ' + reqName);
+        sysParts.push('');
+
+        if (messages.length) {
+          sysParts.push('=== FULL CONVERSATION (oldest first) ===');
+          for (const m of messages) {
+            const isCustomer = m.from_customer === true || m.author_type === 'contact';
+            const who = isCustomer ? 'Customer' : 'Agent';
+            const name = (m.author && (m.author.name || m.author.email)) || m.author_name || '';
+            const text = htmlToPlainText(m.body_html ?? m.html_body ?? m.message_html ?? m.body_text ?? m.body ?? '');
+            if (!text) continue;
+            sysParts.push('--- ' + who + (name ? ' (' + name + ')' : '') + ' ---');
+            sysParts.push(text);
+            sysParts.push('');
+          }
+        }
+
+        if (kbContext) {
+          sysParts.push('=== VARICON KNOWLEDGE BASE — RELEVANT ARTICLES ===');
+          sysParts.push(kbContext);
+        }
+
+        const userMessage = hint
+          ? 'Draft my reply. Here is a hint about what I want to say — use it as intent, but rewrite as a full polished reply:\n\n' + hint
+          : 'Draft a reply to the customer\'s latest message.';
+
+        const system = sysParts.join('\n');
+        const draftText = await callGroq({ system, userMessage, maxTokens: 2000 });
+
+        // Insert into editor — overwriting any existing draft. (The hint has
+        // already been incorporated via the user message.)
+        editor.innerHTML = '';
+        const lines = draftText.split(/\n/);
+        lines.forEach((line, i) => {
+          if (i > 0) editor.appendChild(document.createElement('br'));
+          editor.appendChild(document.createTextNode(line));
+        });
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+
+        const summary = kbStatus
+          ? 'Drafted with ' + kbStatus
+          : 'Drafted from thread (no KB articles matched)';
+        toast(summary, 'success');
+        if (window.__buzz) window.__buzz(10);
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.classList.remove('is-loading'); }
+      }
     }
 
     // The whole flow: take the editor's current draft, build context from the
@@ -7393,6 +7738,10 @@
       for (const key of Object.values(CACHE_KEYS)) {
         try { localStorage.removeItem(key); } catch {}
       }
+      // KB caches (sitemap + article bodies).
+      try { localStorage.removeItem(KB_CACHE_KEY); } catch {}
+      try { localStorage.removeItem(KB_ARTICLE_CACHE_KEY); } catch {}
+      _kbState = { articles: [], loaded: false, loadingPromise: null };
       // Also nuke in-memory state so the next render is truly cold.
       state.allIssues = [];
       state.issues = [];
