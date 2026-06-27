@@ -2669,7 +2669,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v47';
+    const APP_VERSION = 'pylon-mobile-v48';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -5124,50 +5124,50 @@
             <div style="display:flex; align-items:center; gap:8px; margin-bottom: 8px;">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.03-2.95 2.41-4.37 2.52-4.44-1.37-2-3.5-2.28-4.27-2.31-1.82-.19-3.55 1.07-4.47 1.07-.94 0-2.34-1.05-3.85-1.02-1.98.03-3.81 1.15-4.83 2.91-2.06 3.58-.53 8.87 1.49 11.78.98 1.42 2.16 3.02 3.7 2.96 1.49-.06 2.05-.96 3.85-.96 1.78 0 2.31.96 3.88.93 1.6-.03 2.62-1.45 3.6-2.88 1.13-1.65 1.6-3.25 1.63-3.34-.03-.02-3.13-1.2-3.16-4.7zM14.1 4.21c.82-.99 1.37-2.37 1.22-3.74-1.18.05-2.6.79-3.45 1.78-.76.87-1.43 2.27-1.25 3.62 1.32.1 2.66-.67 3.48-1.66z"/></svg>
               <span style="font-weight: 700; font-size: 18px;">iPhone / iPad</span>
-              <span class="tiny" style="margin-left: auto; opacity: .65;">~2 min, one-time</span>
+              <span class="tiny" style="margin-left: auto; opacity: .65;">~90 sec, one-time</span>
             </div>
-            <p class="small muted" style="margin: 0; line-height: 1.5;">
-              You'll build a tiny 2-action Shortcut. After that, tap any Pylon link in chat → <strong>Share</strong> → <strong>Open in Pylon</strong> → ticket opens here.
+            <p class="small muted" style="margin: 0 0 8px; line-height: 1.5;">
+              You'll build a tiny 2-action Shortcut. After that: tap any Pylon link → <strong>Share</strong> → <strong>Open in Pylon</strong> → the PWA opens → tap <strong>Open</strong> on the clipboard banner that appears → ticket loads.
+            </p>
+            <p class="tiny faint" style="margin: 0; line-height: 1.5;">
+              The clipboard banner is required because Apple doesn't let any PWA receive deep-link URLs directly. The Shortcut puts the ticket URL on your clipboard, then opens the PWA, then this app reads the clipboard and routes you to the ticket. Sounds clunky — actually feels seamless after the first try.
             </p>
           </div>
 
           <div class="card">
-            <div class="label" style="margin-bottom: 4px;">First — copy this exact text</div>
-            <p class="tiny faint" style="margin: 0 0 8px;">You'll paste it into the Shortcut in step 3.</p>
-            <div class="row" style="gap: 8px; align-items: center;">
-              <code style="flex: 1; font-family: ui-monospace, Menlo, monospace; font-size: 12px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; word-break: break-all; line-height: 1.4;">${escapeHtml(iosShortcutUrl)}</code>
-              <button class="btn btn-primary" id="copyShortcutUrl" type="button" style="white-space: nowrap;">Copy</button>
-            </div>
-          </div>
+            <div style="font-weight: 600; margin-bottom: 14px;">Build the Shortcut</div>
 
-          <div class="card">
-            <div style="font-weight: 600; margin-bottom: 14px;">Now build the Shortcut</div>
+            ${iosStepBox(1, 'Open the Shortcuts app', `It's built into iOS — the icon is two coloured squares overlapping. If you can't find it, pull down on your home screen and search <strong>Shortcuts</strong>.`)}
 
-            ${iosStepBox(1, 'Open the Shortcuts app', `It's a built-in iOS app — the icon looks like two coloured squares overlapping. If you can't find it, swipe down on the home screen and search "Shortcuts".`)}
+            ${iosStepBox(2, 'Tap + (top-right) to create a new shortcut', `An empty shortcut opens. Tap where it says <strong>New Shortcut</strong> at the top and rename it to <strong>Open in Pylon</strong>.`)}
 
-            ${iosStepBox(2, 'Tap the + button (top-right) to create a new shortcut', `A blank shortcut opens. At the top, tap where it says <strong>"New Shortcut"</strong> and rename it to <strong>Open in Pylon</strong>.`)}
+            ${iosStepBox(3, 'Add action: Copy to Clipboard', `Tap the big <strong>Add Action</strong> button. In the search field type <strong>Copy to Clipboard</strong> and tap the result. The action drops in showing "Copy <em>[Shortcut Input]</em> to clipboard" — you don't need to change anything.`)}
 
-            ${iosStepBox(3, 'Add the URL action', `Tap the big <strong>"Add Action"</strong> button. A search bar appears — type <strong>URL</strong> and tap the action named just <strong>URL</strong> (with a globe icon). It drops in a row with an empty URL field. Tap that field and <strong>paste</strong> the text you copied above. It will end with <code style="font-family: ui-monospace, Menlo, monospace; font-size: 11px;">?shared_url=</code>.<br><br>Now — without leaving that field — tap the small <strong>"Shortcut Input"</strong> chip that appears in the blue suggestion bar above your keyboard. It gets appended after the <code style="font-family: ui-monospace, Menlo, monospace; font-size: 11px;">=</code>. <em>(If you don't see the chip: tap the variable icon — looks like a small box with arrows — in that same bar, then pick "Shortcut Input".)</em>`)}
+            ${iosStepBox(4, 'Add action: Open App', `Tap <strong>Add Action</strong> again. Search <strong>Open App</strong> and tap it. In the action, tap the word <strong>App</strong> (the placeholder) → in the picker, find and tap <strong>Pylon</strong>. <em>(If "Pylon" isn't in the list: you haven't installed the PWA to your home screen yet. Add to Home Screen first, then come back.)</em>`)}
 
-            ${iosStepBox(4, 'Add the Open URLs action', `Tap <strong>"Add Action"</strong> again, search <strong>Open URLs</strong>, tap it. It auto-fills with the URL from step 3 — you don't need to touch it. That's the entire Shortcut. Two actions.`)}
+            ${iosStepBox(5, 'Make it show in the Share sheet', `Tap the <strong>(i)</strong> info icon at the bottom of the screen (a lower-case i in a circle). Turn ON <strong>Show in Share Sheet</strong>. Tap <strong>Share Sheet Types</strong> right below it, deselect everything except <strong>URLs</strong>, tap Done.`)}
 
-            ${iosStepBox(5, 'Make it appear in the Share sheet', `Tap the <strong>(i) info icon</strong> at the bottom of the screen (looks like a lower-case i in a circle, near the play button). In the panel that slides up: turn ON <strong>"Show in Share Sheet"</strong>. Below it, tap <strong>"Share Sheet Types"</strong>, deselect everything except <strong>URLs</strong>, and tap Done.`)}
-
-            ${iosStepBox(6, 'Save and you\'re done', `Tap <strong>Done</strong> in the top-right. You can close Shortcuts now.`)}
+            ${iosStepBox(6, 'Save and close', `Tap <strong>Done</strong> in the top-right. That's the whole setup.`)}
           </div>
 
           <div class="card" style="background: color-mix(in srgb, var(--brand) 8%, var(--surface)); border-color: color-mix(in srgb, var(--brand) 30%, transparent);">
-            <div class="label" style="margin-bottom: 4px;">Test it (it'll work even without a real ticket)</div>
+            <div class="label" style="margin-bottom: 4px;">Test it (works even with a fake ticket number)</div>
             <p class="small" style="margin: 6px 0 8px; line-height: 1.5;">
-              Long-press the link below, tap <strong>Share</strong>, scroll down the share sheet, and tap <strong>Open in Pylon</strong>. The app should open. Since ticket 99999 probably doesn't exist for you, you'll see "Ticket #99999 not in current date range" — that's the success signal. The wiring is working.
+              Long-press the link below → <strong>Share</strong> → scroll down and tap <strong>Open in Pylon</strong>. The PWA should open with a small <em>"Open ticket from clipboard?"</em> banner at the bottom. Tap <strong>Open</strong>. Since ticket 99999 likely doesn't exist for you, you'll get a "not in current date range" toast — that confirms the wiring works end-to-end.
             </p>
             <a href="https://app.usepylon.com/issues?issueNumber=99999" rel="noopener" style="word-break: break-all; font-family: ui-monospace, Menlo, monospace; font-size: 12px;">https://app.usepylon.com/issues?issueNumber=99999</a>
           </div>
 
           <div class="card">
-            <div class="label">If "Open in Pylon" doesn't appear in the Share sheet</div>
-            <p class="small muted" style="margin: 6px 0 0; line-height: 1.5;">
-              Open the Shortcut again, tap the (i) icon, and confirm <strong>Show in Share Sheet</strong> is on. If it is, scroll all the way down the share sheet — Shortcuts always appear below the row of system apps. You may need to tap <strong>Edit Actions</strong> at the very bottom and toggle <strong>Open in Pylon</strong> visible. iOS hides new shortcuts the first time.
+            <div class="label">Troubleshooting</div>
+            <p class="small muted" style="margin: 6px 0 4px; line-height: 1.5;">
+              <strong>"Open in Pylon" isn't in the Share sheet:</strong> open the Shortcut, tap (i), confirm <strong>Show in Share Sheet</strong> is on. Then in the Share sheet itself, scroll all the way down — iOS lists Shortcuts after the system apps. The first time, you may need to tap <strong>Edit Actions</strong> at the bottom and enable it.
+            </p>
+            <p class="small muted" style="margin: 10px 0 4px; line-height: 1.5;">
+              <strong>The PWA opens but no clipboard banner appears:</strong> swipe down from the top to refresh once. If still nothing, the PWA may have been built before this version — Settings → Advanced → Clear cache and try again.
+            </p>
+            <p class="small muted" style="margin: 10px 0 0; line-height: 1.5;">
+              <strong>"Pylon" doesn't show up in the Open App picker:</strong> you need to install the PWA to your home screen first (Safari → Share → Add to Home Screen). The Open App action only lists installed apps and home-screen PWAs.
             </p>
           </div>`;
 
@@ -5346,6 +5346,7 @@
           mergeIntoAllIssues(items);
           reapplyFilters();
           try { saveIssuesCache(); } catch {}
+        try { if (state.pendingDeepLink) tryResolveDeepLink(); } catch {}
           return;
         }
 
@@ -5381,6 +5382,7 @@
         state.allIssues = all;
         reapplyFilters();
         try { saveIssuesCache(); } catch {}
+        try { if (state.pendingDeepLink) tryResolveDeepLink(); } catch {}
         return;
       } catch (e) {
         const status = e && e.status;
@@ -7663,6 +7665,109 @@
       return false;
     }
 
+    // Find a Pylon ticket reference inside arbitrary text — used for clipboard
+    // and shared_text handling. Same regex set as parseDeepLink().
+    function findLinkInText(text) {
+      if (!text || typeof text !== 'string') return null;
+      const m1 = text.match(/[?&]issueNumber=(\d+)/i);
+      if (m1) return { type: 'number', value: m1[1] };
+      const m2 = text.match(/\/issues\/([0-9a-f-]{8,})/i);
+      if (m2) return { type: 'id', value: m2[1] };
+      // Bare "#12345" or " 12345 " — only accept when clearly a number ref
+      const m3 = text.match(/(?:^|[#\s])(\d{3,8})(?:$|\s|\D)/);
+      if (m3) return { type: 'number', value: m3[1] };
+      return null;
+    }
+
+    // ============ iOS clipboard deep link ============
+    // Why this exists: on iOS, you cannot launch a home-screen PWA with a deep
+    // link URL. Tapping `https://...?issueNumber=12345` always opens Safari,
+    // even when the URL is exactly inside the PWA's scope — Apple doesn't let
+    // PWAs claim URL ownership. The only way to launch the PWA from outside
+    // it is the Shortcuts "Open App" action, which launches the PWA at
+    // start_url with no parameters.
+    //
+    // Workaround: the iOS Shortcut copies the Pylon URL to the clipboard and
+    // then opens the PWA via "Open App". When the PWA boots, we offer to read
+    // the clipboard and route the user to the ticket inside. Requires a tap
+    // because iOS only grants clipboard.readText() under user activation.
+    function isIOS() {
+      const ua = navigator.userAgent || '';
+      return /iPhone|iPad|iPod/.test(ua) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+    function isStandalonePWA() {
+      return window.matchMedia('(display-mode: standalone)').matches ||
+        window.matchMedia('(display-mode: fullscreen)').matches ||
+        window.navigator.standalone === true;
+    }
+    // Track when this PWA session started so we don't spam the banner on
+    // every visibility-change.
+    let _clipboardBannerShownAt = 0;
+    function maybeShowClipboardBanner() {
+      // Only on iOS standalone — Android has share_target, desktop uses URL.
+      if (!isIOS() || !isStandalonePWA()) return;
+      // Don't show if a URL-based deep link is already being processed.
+      if (state.pendingDeepLink) return;
+      // Don't show if user is mid-ticket.
+      if (state.view === 'detail') return;
+      // Don't re-show within 30s of last show.
+      const now = Date.now();
+      if (now - _clipboardBannerShownAt < 30000) return;
+      _clipboardBannerShownAt = now;
+      showClipboardBanner();
+    }
+    function showClipboardBanner() {
+      let bar = document.getElementById('clipboard-deep-bar');
+      if (bar) return;
+      bar = document.createElement('div');
+      bar.id = 'clipboard-deep-bar';
+      bar.className = 'pwa-update-bar';
+      bar.style.background = 'var(--surface)';
+      bar.style.color = 'var(--text)';
+      bar.style.borderColor = 'var(--border)';
+      bar.innerHTML = `
+        <span style="color: var(--text);">Open ticket from clipboard?</span>
+        <button type="button" id="clip-open" style="background: var(--accent); color: white;">Open</button>
+        <button type="button" id="clip-dismiss" aria-label="Dismiss" style="color: var(--text-faint);">×</button>
+      `;
+      document.body.appendChild(bar);
+      const dismiss = () => { if (bar) bar.remove(); };
+      document.getElementById('clip-dismiss').onclick = dismiss;
+      document.getElementById('clip-open').onclick = async () => {
+        try {
+          if (!navigator.clipboard || !navigator.clipboard.readText) {
+            toast('Clipboard not available on this device', 'error');
+            dismiss();
+            return;
+          }
+          const text = await navigator.clipboard.readText();
+          const link = findLinkInText(text || '');
+          if (!link) {
+            toast('No Pylon link found in clipboard', 'error');
+            dismiss();
+            return;
+          }
+          dismiss();
+          state.pendingDeepLink = link;
+          if (!tryResolveDeepLink()) {
+            // Wait for the regular load to pull in this ticket if it wasn't
+            // already in the cache. tryResolveDeepLink() in the boot path
+            // will retry after loadIssues completes.
+            toast('Looking up ticket #' + link.value + '…', 'info');
+          }
+        } catch (e) {
+          // Most likely permission denied / no user activation. We had a
+          // user gesture (the button tap) so this rarely happens, but iOS
+          // can be picky.
+          toast('Could not read clipboard — try copying the link again', 'error');
+          dismiss();
+        }
+      };
+      // Auto-dismiss after 12 seconds so it doesn't linger.
+      setTimeout(() => { if (document.getElementById('clipboard-deep-bar')) dismiss(); }, 12000);
+    }
+
     // ============ Boot ============
     state.pendingDeepLink = parseDeepLink();
     if (!cfg.apiKey) {
@@ -7713,6 +7818,12 @@
       // call (first page only) instead of a full pagination, so we don't
       // re-burn the rate-limit budget every cold start.
       const issuesPromise = loadIssues({ silent: haveIssues });
+      // iOS launch: if there's no URL-based deep link, offer to read the
+      // clipboard. This handles the Shortcut → "Open App" → clipboard flow.
+      if (!state.pendingDeepLink) {
+        // Small delay so the initial render finishes painting first.
+        setTimeout(() => maybeShowClipboardBanner(), 350);
+      }
       // After issues finish loading, retry the deep link in case it wasn't
       // in the cache. If it's still not found, tell the user politely
       // (probably outside the 28-day date window).
