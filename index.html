@@ -2477,7 +2477,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v39';
+    const APP_VERSION = 'pylon-mobile-v40';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -4895,12 +4895,24 @@
           return;
         }
 
-        // Non-silent (user-initiated first load): full pagination.
+        // Non-silent (user-initiated first load): full pagination with a small
+        // delay between pages so we stay under Pylon's 20 req/min limit. With
+        // 3.5s between pages, the steady-state rate is 17/min — safe headroom.
+        // The first page goes through immediately so the inbox renders fast.
+        const PAGE_DELAY_MS = 3500;
         let all = [];
         let cursor = null;
         let pages = 0;
-        const MAX_PAGES = 30; // hard cap so a misbehaving API can't loop forever
+        const MAX_PAGES = 30;
         do {
+          if (pages > 0) {
+            // Pace remaining pages so we don't burst past Pylon's rate limit.
+            await new Promise(r => setTimeout(r, PAGE_DELAY_MS));
+          }
+          // If something else 429'd us in the meantime, stop paginating —
+          // we already have the first page or two, which is enough for the
+          // user to start working.
+          if (isRateLimited()) break;
           const q = cursor ? Object.assign({}, baseQuery, { cursor }) : baseQuery;
           const resp = await Pylon.listIssues(q);
           const items = extractList(resp);
@@ -4917,15 +4929,36 @@
         try { saveIssuesCache(); } catch {}
         return;
       } catch (e) {
-        if (!silent) {
-          state.allIssues = [];
-          state.issues = [];
-          state.stateCounts = {};
-          state.assigneeStats = [];
-          state.error = friendlyError(e);
+        const status = e && e.status;
+        // 429: preserve any cached data instead of wiping the UI. Show a
+        // soft toast and auto-retry once the back-off expires.
+        if (status === 429) {
+          // mergeIntoAllIssues + saveIssuesCache already ran for any pages we
+          // got before the 429, so the inbox still shows what we have. No
+          // need to set state.error and blank the screen.
+          state.loading = false;
+          // Schedule a silent retry once the rate-limit window elapses.
+          const waitMs = Math.max(1000, (state._rateLimitedUntil || 0) - Date.now() + 500);
+          setTimeout(() => {
+            if (state.view === 'list' && !isRateLimited()) {
+              loadIssues({ silent: true }).catch(() => {});
+            }
+          }, waitMs);
+          // Only show the hard error if we have absolutely nothing to display.
+          if (!silent && (!state.allIssues || state.allIssues.length === 0)) {
+            state.error = 'Rate limited — auto-retry in ' + Math.ceil(waitMs / 1000) + 's.';
+          }
+          patchView();
+          return;
         }
-        // Silent failures don't wipe data — just log via the api() call's
-        // own error handler.
+        // Other errors: only clear state if we had nothing cached anyway.
+        if (!silent) {
+          if (!state.allIssues || state.allIssues.length === 0) {
+            state.stateCounts = {};
+            state.assigneeStats = [];
+            state.error = friendlyError(e);
+          }
+        }
       } finally {
         if (!silent) {
           state.loading = false;
