@@ -2669,7 +2669,7 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v43';
+    const APP_VERSION = 'pylon-mobile-v44';
     const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
@@ -3196,6 +3196,10 @@
         hdrTitle.textContent = 'Email signature';
         hdrLeft.hidden = false;
         hdrRight.hidden = true;
+      } else if (state.view === 'deeplink-help') {
+        hdrTitle.textContent = 'Open Pylon links';
+        hdrLeft.hidden = false;
+        hdrRight.hidden = true;
       }
 
       // Apply split-pane class to .app so the CSS media query can do its thing.
@@ -3215,6 +3219,7 @@
       if (state.view === 'settings') return renderSettings();
       if (state.view === 'netlog') return renderNetLog();
       if (state.view === 'signature') return renderSignature();
+      if (state.view === 'deeplink-help') return renderDeepLinkHelp();
     }
 
     // Collapse / expand the left inbox pane in split-pane mode. Persists the
@@ -4935,6 +4940,14 @@
           </div>
 
           <div class="list-card">
+            <button class="list-row" id="openDeepLinkHelp">
+              <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+              <span class="body"><span class="l1">Open Pylon links from chat</span><span class="l2">Set up the iOS Shortcut once — tap any Pylon link to open here</span></span>
+              <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+          </div>
+
+          <div class="list-card">
             <button class="list-row" id="viewNetLog">
               <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></span>
               <span class="body"><span class="l1">Network log</span><span class="l2">${netLog.length} recent API call${netLog.length === 1 ? '' : 's'}</span></span>
@@ -4994,6 +5007,7 @@
       document.getElementById('editAiPrompt').addEventListener('click', () => promptAndSave('System prompt (multi-line OK; leave blank for default)', cfg.aiSystemPrompt || '', (v) => { cfg.aiSystemPrompt = v.trim(); saveConfig(); toast(cfg.aiSystemPrompt ? 'System prompt saved' : 'Using default prompt', 'success'); render(); }));
       document.getElementById('editAiModel').addEventListener('click', () => promptAndSave('Groq model (e.g. llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768)', cfg.aiModel || DEFAULT_AI_MODEL, (v) => { cfg.aiModel = v.trim() || DEFAULT_AI_MODEL; saveConfig(); toast('Model saved: ' + cfg.aiModel, 'success'); render(); }));
       document.getElementById('viewNetLog').addEventListener('click', () => { state.view = 'netlog'; render(); });
+      document.getElementById('openDeepLinkHelp').addEventListener('click', () => { state.view = 'deeplink-help'; render(); });
       document.getElementById('clearCache').addEventListener('click', () => {
         if (!confirm('Clear all cached data?\n\nThis wipes cached issues, accounts, contacts and previews from this device. Your API keys, AI settings and signature are kept.\n\nThe next time the app loads it will fetch everything fresh from Pylon.')) return;
         clearAllCaches();
@@ -5086,6 +5100,85 @@
       document.getElementById('sigCancel').addEventListener('click', () => {
         state.view = 'settings'; render();
       });
+    }
+
+    function renderDeepLinkHelp() {
+      const appUrl = location.origin + location.pathname.replace(/[^/]*$/, '');
+      // Strip the trailing index.html if present so the URL is the cleanest form.
+      const cleanAppUrl = appUrl.replace(/index\.html\/?$/, '');
+      const exampleUrl = cleanAppUrl + '?issueNumber=12345';
+      const testUrl = cleanAppUrl + '?issueNumber=99999';
+      main.innerHTML = `
+        <div class="stack-16">
+          <div class="card">
+            <div style="font-weight: 700; font-size: 17px; margin-bottom: 8px;">Open Pylon links from chat</div>
+            <p class="small muted" style="margin: 0 0 8px; line-height: 1.5;">
+              iOS won't let any app — including this PWA — claim ownership of <code style="font-family: ui-monospace, Menlo, monospace; opacity: .85;">app.usepylon.com</code> links, because Apple only allows that when you own the destination domain. The workaround: an iOS Shortcut that grabs the ticket number from a Pylon URL and re-opens it here.
+            </p>
+            <p class="small muted" style="margin: 0; line-height: 1.5;">
+              Once set up, long-press any Pylon link in Google Chat / Slack / Mail → tap <strong>Share</strong> → tap <strong>Open in Pylon</strong> — the ticket loads in this app within a second.
+            </p>
+          </div>
+
+          <div class="card">
+            <div class="label">Your PWA URL</div>
+            <div class="row" style="gap: 8px; align-items: center; margin-top: 6px;">
+              <code style="flex: 1; font-family: ui-monospace, Menlo, monospace; font-size: 12px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; word-break: break-all; line-height: 1.4;">${escapeHtml(cleanAppUrl)}</code>
+              <button class="btn" id="copyAppUrl" type="button" style="white-space: nowrap;">Copy</button>
+            </div>
+            <p class="tiny faint" style="margin: 8px 0 0;">You'll paste this into the Shortcut in step 3 below.</p>
+          </div>
+
+          <div class="card">
+            <div class="label" style="margin-bottom: 8px;">Build the Shortcut (one-time, ~3 minutes)</div>
+            <ol style="margin: 0; padding-left: 20px; line-height: 1.6; font-size: 14px;">
+              <li>Open the <strong>Shortcuts</strong> app on your iPhone / iPad.</li>
+              <li>Tap <strong>+</strong> (top-right) to create a new shortcut. Tap the title at the top and rename it to <strong>Open in Pylon</strong>.</li>
+              <li>Tap <strong>Add Action</strong>. Search for and add: <em>URL</em>. In the URL field, paste:
+                <div style="margin: 6px 0;"><code style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; padding: 6px 8px; background: var(--surface-2); border-radius: 6px; word-break: break-all; display: inline-block;">${escapeHtml(cleanAppUrl)}?issueNumber=</code></div>
+              </li>
+              <li>Add action: <em>Get Text from Input</em>. (This reads the Pylon URL the user is sharing.)</li>
+              <li>Add action: <em>Match Text</em>. Set the pattern to:
+                <div style="margin: 6px 0;"><code style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; padding: 6px 8px; background: var(--surface-2); border-radius: 6px;">issueNumber=([0-9]+)</code></div>
+                Then tap the variable chip and switch it from <strong>Matches</strong> to <strong>Groups</strong> → <strong>Group 1</strong>.
+              </li>
+              <li>Add action: <em>Combine Text</em>. Drag the <strong>URL</strong> variable (from step 3) and then the <strong>Group 1</strong> variable into the Combine field, with no separator.</li>
+              <li>Add action: <em>Open URLs</em>. Use the <strong>Combined Text</strong> variable as the input.</li>
+              <li>Tap the settings icon (sliders, top of screen) → <strong>Use as Quick Action</strong> → toggle <strong>Share Sheet</strong> on. Under <strong>Share Sheet Types</strong>, leave only <strong>URLs</strong> checked.</li>
+              <li>Tap <strong>Done</strong>. The Shortcut now appears in the Share sheet whenever you share a URL.</li>
+            </ol>
+          </div>
+
+          <div class="card">
+            <div class="label">Test it</div>
+            <p class="small muted" style="margin: 6px 0 8px; line-height: 1.5;">
+              Long-press this link, choose <strong>Share</strong>, scroll down and tap <strong>Open in Pylon</strong>. It should bounce you into this app and (if ticket 99999 exists for you) open it. If not, you'll see a friendly "not in current date range" message — that confirms the wiring works.
+            </p>
+            <a href="https://app.usepylon.com/issues?issueNumber=99999" rel="noopener" style="word-break: break-all; font-family: ui-monospace, Menlo, monospace; font-size: 12px;">https://app.usepylon.com/issues?issueNumber=99999</a>
+          </div>
+
+          <div class="card">
+            <div class="label">If you'd rather skip the Shortcut</div>
+            <p class="small muted" style="margin: 6px 0 0; line-height: 1.5;">
+              You can also open any ticket directly by appending <code style="font-family: ui-monospace, Menlo, monospace; opacity: .85;">?issueNumber=12345</code> to the app URL. Example:
+            </p>
+            <code style="display: block; margin-top: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; word-break: break-all; line-height: 1.4;">${escapeHtml(exampleUrl)}</code>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn" id="deepBack" type="button">Back to Settings</button>
+          </div>
+        </div>
+      `;
+      document.getElementById('copyAppUrl').addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(cleanAppUrl);
+          toast('App URL copied', 'success');
+        } catch {
+          toast('Copy failed — long-press the URL instead', 'error');
+        }
+      });
+      document.getElementById('deepBack').addEventListener('click', () => { state.view = 'settings'; render(); });
     }
 
     function renderNetLog() {
@@ -5889,6 +5982,7 @@
         else if (state.view === 'settings') navigate('list');
         else if (state.view === 'netlog') { state.view = 'settings'; render(); }
         else if (state.view === 'signature') { state.view = 'settings'; render(); }
+        else if (state.view === 'deeplink-help') { state.view = 'settings'; render(); }
       }
     });
 
@@ -5927,9 +6021,9 @@
           navigate('list', { _fromHistory: true });
           return;
         }
-        // Netlog / Signature are subviews of Settings (not pushed via
-        // navigate()), so we move to settings directly and re-render.
-        if (state.view === 'netlog' || state.view === 'signature') {
+        // Netlog / Signature / Deep-link help are subviews of Settings (not
+        // pushed via navigate()), so we move to settings directly and re-render.
+        if (state.view === 'netlog' || state.view === 'signature' || state.view === 'deeplink-help') {
           state.view = 'settings';
           render();
           return;
@@ -7438,7 +7532,54 @@
       return true;
     }
 
+    // ============ Deep linking ============
+    // When opened with ?issueNumber=12345 (or ?ticket=…/?issue=<uuid>/?id=<uuid>)
+    // jump straight to that ticket. Used by the iOS Shortcut that captures
+    // Pylon links from Google Chat / Slack and bounces them into the PWA.
+    // (iOS won't open https://app.usepylon.com links in our PWA — Apple only
+    //  allows that when we control the destination domain via Universal Links
+    //  — so the Shortcut is the workaround.)
+    function parseDeepLink() {
+      try {
+        const params = new URLSearchParams(location.search);
+        const num = params.get('issueNumber') || params.get('ticket');
+        const id = params.get('issue') || params.get('id');
+        if (id) return { type: 'id', value: String(id).trim() };
+        if (num) return { type: 'number', value: String(num).trim() };
+      } catch {}
+      return null;
+    }
+    function clearDeepLinkFromUrl() {
+      try {
+        const u = new URL(location.href);
+        u.search = '';
+        // Keep the same history entry; just strip the query so a manual reload
+        // doesn't re-trigger the same deep link.
+        history.replaceState(history.state, '', u.toString());
+      } catch {}
+    }
+    function tryResolveDeepLink() {
+      const link = state.pendingDeepLink;
+      if (!link) return false;
+      if (link.type === 'id') {
+        state.pendingDeepLink = null;
+        clearDeepLinkFromUrl();
+        navigate('detail', { issue: { id: link.value } });
+        return true;
+      }
+      const list = state.allIssues || [];
+      const match = list.find(i => String(i.number) === link.value);
+      if (match) {
+        state.pendingDeepLink = null;
+        clearDeepLinkFromUrl();
+        navigate('detail', { issue: match });
+        return true;
+      }
+      return false;
+    }
+
     // ============ Boot ============
+    state.pendingDeepLink = parseDeepLink();
     if (!cfg.apiKey) {
       render();
     } else {
@@ -7457,11 +7598,24 @@
         // loadIssues' first network call fires.
         state.loading = true;
       }
-      // Render IMMEDIATELY — don't block on /me. Previously this code waited
-      // for Pylon.me() to resolve before calling render(), which meant a 27s
-      // /me request (slow proxy / cold network) left the user staring at a
-      // blank screen for 27s before even seeing the loading spinner.
-      render();
+      // If we have a deep link AND it can be resolved from cache, jump there
+      // before the first paint so the user lands directly on the ticket.
+      // Otherwise render the list now; we'll retry the deep link once
+      // loadIssues completes.
+      const resolvedFromCache = haveIssues && tryResolveDeepLink();
+      if (resolvedFromCache) {
+        // navigate() already called render() — nothing more to do here.
+      } else {
+        if (state.pendingDeepLink) {
+          // Show a hint so the user knows the ticket is being fetched.
+          try { toast('Looking up ticket #' + state.pendingDeepLink.value + '…', 'info'); } catch {}
+        }
+        // Render IMMEDIATELY — don't block on /me. Previously this code waited
+        // for Pylon.me() to resolve before calling render(), which meant a 27s
+        // /me request (slow proxy / cold network) left the user staring at a
+        // blank screen for 27s before even seeing the loading spinner.
+        render();
+      }
       // Now fire /me in background. It updates state.me when it resolves and
       // re-renders — but the inbox is already showing by then.
       Pylon.me().then(me => {
@@ -7473,7 +7627,20 @@
       // Use silent refresh if we already restored data — that's a single API
       // call (first page only) instead of a full pagination, so we don't
       // re-burn the rate-limit budget every cold start.
-      loadIssues({ silent: haveIssues });
+      const issuesPromise = loadIssues({ silent: haveIssues });
+      // After issues finish loading, retry the deep link in case it wasn't
+      // in the cache. If it's still not found, tell the user politely
+      // (probably outside the 28-day date window).
+      if (state.pendingDeepLink) {
+        Promise.resolve(issuesPromise).then(() => {
+          if (!state.pendingDeepLink) return;
+          if (tryResolveDeepLink()) return;
+          const link = state.pendingDeepLink;
+          state.pendingDeepLink = null;
+          clearDeepLinkFromUrl();
+          toast('Ticket #' + link.value + ' not in current date range — widen the date filter to find it.', 'error');
+        }).catch(() => {});
+      }
     }
 
     // ============ PWA: service worker + install handling ============
