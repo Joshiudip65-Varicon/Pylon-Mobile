@@ -984,6 +984,55 @@
       color: var(--text-muted);
       font-weight: 400;
     }
+
+    /* Model picker row internals — inherits .filter-row-btn styling for touch
+       target + selection state, adds a title-line with chips and a
+       monospaced model-ID line underneath. */
+    .model-row-btn { align-items: flex-start; padding: 12px 6px; }
+    .model-row-btn .filter-row-check { margin-top: 2px; }
+    .model-row-title {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      font-size: 14.5px;
+    }
+    .model-row-id {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      color: var(--text-faint);
+      margin-top: 4px;
+      opacity: .8;
+      word-break: break-all;
+    }
+    .model-tag, .model-tier {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 600;
+      line-height: 1.5;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .model-tag-recommended {
+      background: color-mix(in srgb, var(--accent) 16%, transparent);
+      color: var(--accent);
+    }
+    .model-tag-fastest {
+      background: color-mix(in srgb, var(--success) 16%, transparent);
+      color: var(--success);
+    }
+    .model-tag-agentic {
+      background: color-mix(in srgb, #b880ff 22%, transparent);
+      color: #b880ff;
+    }
+    .model-tier {
+      background: var(--surface-2);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
     .filter-search {
       width: 100%;
       padding: 9px 12px;
@@ -2669,8 +2718,62 @@
     // Keep this in sync with sw.js VERSION on every release. Shown at the
     // bottom of the Settings screen so the user can verify which build their
     // PWA is currently running after an update.
-    const APP_VERSION = 'pylon-mobile-v49';
-    const DEFAULT_AI_MODEL = 'llama-3.3-70b-versatile';
+    const APP_VERSION = 'pylon-mobile-v50';
+    // Groq's default chat model. llama-3.3-70b-versatile was decommissioned on
+    // 2026-08-16; Groq's recommended migration targets are gpt-oss-120b (best
+    // quality) and qwen3.6-27b. Full list in AI_MODELS below.
+    const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+
+    // Curated model picker used in Settings → Model. Only chat-capable models
+    // on Groq's Production or Preview tiers as of 2026-08-19. Voice, safety
+    // and prompt-guard models are excluded. If Groq adds/removes a model
+    // just edit this array.
+    const AI_MODELS = [
+      {
+        id: 'openai/gpt-oss-120b',
+        name: 'GPT-OSS 120B',
+        tag: 'Recommended',
+        tier: 'Production',
+        note: 'OpenAI\'s flagship open-weight model. Best draft quality — 500 tps, 131K context.',
+      },
+      {
+        id: 'openai/gpt-oss-20b',
+        name: 'GPT-OSS 20B',
+        tag: 'Fastest',
+        tier: 'Production',
+        note: 'Twice as fast as 120B, half the cost. Great for quick drafts when you don\'t need heavy reasoning — 1000 tps, 131K context.',
+      },
+      {
+        id: 'qwen/qwen3.6-27b',
+        name: 'Qwen 3.6 27B',
+        tier: 'Preview',
+        note: 'Alibaba flagship — Groq\'s alternative migration target from Llama 3.3. Pricier but strong on multilingual — 500 tps, 131K context.',
+      },
+      {
+        id: 'groq/compound',
+        name: 'Groq Compound',
+        tag: 'Agentic',
+        tier: 'System',
+        note: 'Wraps GPT-OSS with built-in web search + code execution. Overkill for draft replies but useful if you want the AI to look up recent docs.',
+      },
+      {
+        id: 'groq/compound-mini',
+        name: 'Compound Mini',
+        tier: 'System',
+        note: 'Lighter agentic system. Same tools as Compound, smaller underlying model.',
+      },
+    ];
+
+    // Models that no longer serve requests — swept to DEFAULT_AI_MODEL at
+    // load time so existing installs don't hit "Model has been decommissioned"
+    // errors on their next AI Draft.
+    const DECOMMISSIONED_AI_MODELS = new Set([
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant',
+      'qwen/qwen3-32b',
+      'meta-llama/llama-4-scout-17b-16e-instruct',
+      'mixtral-8x7b-32768',
+    ]);
     const DEFAULT_AI_PROMPT =
       "You are an experienced customer support specialist helping me refine my reply to a Pylon support ticket. " +
       "Keep my intent and voice, but make the message clearer, friendlier, and more professional. " +
@@ -2695,6 +2798,14 @@
         // billing-attached Google accounts). Reset any stale model so the
         // request shape matches the active provider.
         if (merged.aiModel && (/^claude-/i.test(merged.aiModel) || /^gemini-/i.test(merged.aiModel))) {
+          merged.aiModel = DEFAULT_AI_MODEL;
+        }
+        // Sweep any Groq model IDs that have been decommissioned. Llama 3.3
+        // 70B versatile was retired on 2026-08-16 and Groq returns HTTP 400
+        // now if you send it as the model. Push those users to the new
+        // default so AI Draft keeps working without them needing to hunt
+        // through Settings.
+        if (merged.aiModel && DECOMMISSIONED_AI_MODELS.has(merged.aiModel)) {
           merged.aiModel = DEFAULT_AI_MODEL;
         }
         // Old keys from prior providers won't auth against Groq (Groq keys
@@ -4943,7 +5054,11 @@
             </button>
             <button class="list-row" id="editAiModel">
               <span class="left"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/></svg></span>
-              <span class="body"><span class="l1">Model</span><span class="l2">${escapeHtml(cfg.aiModel || DEFAULT_AI_MODEL)}</span></span>
+              <span class="body"><span class="l1">Model</span><span class="l2">${(() => {
+                const id = cfg.aiModel || DEFAULT_AI_MODEL;
+                const known = AI_MODELS.find(m => m.id === id);
+                return escapeHtml(known ? known.name + ' · ' + id : id);
+              })()}</span></span>
               <span class="right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
             </button>
           </div>
@@ -5024,7 +5139,7 @@
         render();
       }));
       document.getElementById('editAiDraftPrompt').addEventListener('click', () => promptAndSave('AI Draft system prompt (multi-line OK; leave blank for default)', cfg.aiDraftPrompt || '', (v) => { cfg.aiDraftPrompt = v.trim(); saveConfig(); toast(cfg.aiDraftPrompt ? 'Draft prompt saved' : 'Using default draft prompt', 'success'); render(); }));
-      document.getElementById('editAiModel').addEventListener('click', () => promptAndSave('Groq model (e.g. llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768)', cfg.aiModel || DEFAULT_AI_MODEL, (v) => { cfg.aiModel = v.trim() || DEFAULT_AI_MODEL; saveConfig(); toast('Model saved: ' + cfg.aiModel, 'success'); render(); }));
+      document.getElementById('editAiModel').addEventListener('click', openModelPicker);
       document.getElementById('viewNetLog').addEventListener('click', () => { state.view = 'netlog'; render(); });
       document.getElementById('openDeepLinkHelp').addEventListener('click', () => { state.view = 'deeplink-help'; render(); });
       document.getElementById('clearCache').addEventListener('click', () => {
@@ -5288,6 +5403,98 @@
       const v = window.prompt(label, current);
       if (v === null) return;
       onSave(v.trim());
+    }
+
+    // Model picker modal — a tap-to-select list of curated Groq models plus a
+    // Custom option that falls through to promptAndSave for anyone who wants
+    // to plug in a preview model that's not in AI_MODELS. Reuses the
+    // .confirm-overlay/.filter-sheet/.filter-row-btn structure so it inherits
+    // the app's styling, safe-area handling, and iOS-friendly touch targets.
+    function openModelPicker() {
+      // If one is already open, don't stack.
+      if (document.querySelector('.confirm-overlay [data-picker="model"]')) return;
+
+      const current = cfg.aiModel || DEFAULT_AI_MODEL;
+      const overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+
+      // Each row shows: name (bold) + optional tag chip + note (sublabel) +
+      // model ID in monospace. The aria-pressed row is the currently-active
+      // model — its check icon shows filled.
+      const rowHtml = (m) => {
+        const selected = (m.id === current);
+        const tagChip = m.tag
+          ? '<span class="model-tag model-tag-' + escapeAttr(m.tag.toLowerCase()) + '">' + escapeHtml(m.tag) + '</span>'
+          : '';
+        const tierChip = m.tier
+          ? '<span class="model-tier">' + escapeHtml(m.tier) + '</span>'
+          : '';
+        return '<li><button type="button" class="filter-row-btn model-row-btn" data-value="' + escapeAttr(m.id) + '"' +
+          (selected ? ' aria-pressed="true"' : '') + '>' +
+          '<span class="filter-row-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>' +
+          '<span class="filter-row-label">' +
+            '<span class="model-row-title">' + escapeHtml(m.name) + tagChip + tierChip + '</span>' +
+            (m.note ? '<span class="filter-row-sublabel">' + escapeHtml(m.note) + '</span>' : '') +
+            '<span class="model-row-id">' + escapeHtml(m.id) + '</span>' +
+          '</span>' +
+        '</button></li>';
+      };
+
+      const customRow =
+        '<li><button type="button" class="filter-row-btn model-row-btn" data-value="__custom__">' +
+          '<span class="filter-row-check" style="border-style:dashed;">' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+          '</span>' +
+          '<span class="filter-row-label">' +
+            '<span class="model-row-title">Custom model ID…</span>' +
+            '<span class="filter-row-sublabel">Type any Groq model ID (e.g. a preview model)</span>' +
+          '</span>' +
+        '</button></li>';
+
+      overlay.innerHTML =
+        '<div class="confirm-modal filter-sheet" role="dialog" data-picker="model">' +
+          '<h3>AI model <span class="filter-sheet-hint">Tap to select</span></h3>' +
+          '<ul class="filter-list" id="modelPickerList">' +
+            AI_MODELS.map(rowHtml).join('') +
+            customRow +
+          '</ul>' +
+          '<div class="confirm-actions">' +
+            '<button type="button" class="confirm-cancel" data-action="cancel">Cancel</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      requestAnimationFrame(function () { overlay.classList.add('is-open'); });
+
+      function close() {
+        overlay.classList.remove('is-open');
+        setTimeout(function () { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 160);
+        document.removeEventListener('keydown', onKey);
+      }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+
+      overlay.querySelector('#modelPickerList').addEventListener('click', function (e) {
+        const btn = e.target.closest('.model-row-btn');
+        if (!btn) return;
+        const v = btn.dataset.value;
+        if (v === '__custom__') {
+          close();
+          promptAndSave('Custom Groq model ID (e.g. openai/gpt-oss-20b)', cfg.aiModel || DEFAULT_AI_MODEL, (val) => {
+            cfg.aiModel = (val || '').trim() || DEFAULT_AI_MODEL;
+            saveConfig();
+            toast('Model saved: ' + cfg.aiModel, 'success');
+            render();
+          });
+          return;
+        }
+        cfg.aiModel = v;
+        saveConfig();
+        toast('Model set to ' + v, 'success');
+        close();
+        render();
+      });
+      overlay.querySelector('[data-action="cancel"]').addEventListener('click', close);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+      document.addEventListener('keydown', onKey);
     }
 
     // ============ Data loading ============
